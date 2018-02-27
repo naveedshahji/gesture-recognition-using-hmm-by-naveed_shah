@@ -1,0 +1,284 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <ChecksToRun>
+        <MultidimensionalArrayRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_MultidimensionalArrayRule</Message>
+            <Category>LanguageFeatures</Category>
+        </MultidimensionalArrayRule>
+
+        <MultidimensionalArrayRank1Rule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_MultidimensionalArrayRankOneRule</Message>
+            <Category>LanguageFeatures</Category>
+        </MultidimensionalArrayRank1Rule>
+
+        <ArrayOfPointersRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_ArrayOfPointersRule</Message>
+            <Category>LanguageFeatures</Category>
+        </ArrayOfPointersRule>
+
+        <UnsupportedTypeRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_UnsupportedTypeRule</Message>
+            <Category>FrameworkClassesOrMethods</Category>
+        </UnsupportedTypeRule>
+
+        <UnsupportedDelegateTypeRule on="true">
+          <ErrorLevel>warning</ErrorLevel>
+          <Message>Rule_UnsupportedDelegateTypeRule</Message>
+          <Category>FrameworkClassesOrMethods</Category>
+        </UnsupportedDelegateTypeRule>
+
+        <UnsupportedMethodRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_UnsupportedMethodRule</Message>
+            <Category>FrameworkClassesOrMethods</Category>
+        </UnsupportedMethodRule>
+
+        <UnsupportedUnmanagedTypeRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_UnsupportedUnmanagedTypeRule</Message>
+            <Category>RuntimeSupport</Category>
+        </UnsupportedUnmanagedTypeRule>
+
+        <UnsupportedClassInterfaceTypeRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_UnsupportedClassInterfaceTypeRule</Message>
+            <Category>LanguageFeatures</Category>
+        </UnsupportedClassInterfaceTypeRule>
+
+        <ValueTypeSizeRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_ValueTypeSizeRule</Message>
+            <Category>RuntimeSupport</Category>
+        </ValueTypeSizeRule>
+
+        <InfiniteLoopRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_InfiniteLoopRule</Message>
+            <Category>RuntimeSupport</Category>
+        </InfiniteLoopRule>
+
+        <GetRuntimeMethodsRule on="true">
+            <ErrorLevel>message</ErrorLevel>
+            <Message>Rule_GetRuntimeMethodsRule</Message>
+            <Category>Informational</Category>
+        </GetRuntimeMethodsRule>
+
+        <GetTypeRule on="true">
+            <ErrorLevel>message</ErrorLevel>
+            <Message>Rule_GetTypeRule</Message>
+            <Category>Informational</Category>
+        </GetTypeRule>
+
+        <TypeInfoGUIDRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_GetTypeGuidRule</Message>
+            <Category>FrameworkClassesOrMethods</Category>
+        </TypeInfoGUIDRule>
+
+        <EventSourceLocalizedStringRule on="true">
+            <ErrorLevel>warning</ErrorLevel>
+            <Message>Rule_LocalizedEventSourceStringsRule</Message>
+            <Category>LanguageFeatures</Category>
+        </EventSourceLocalizedStringRule>
+
+        <UnsupportedContractsRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_UnsupportedContractRule</Message>
+            <Category>ContractAssemblies</Category>
+        </UnsupportedContractsRule>
+
+        <WinMdIntPtrRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_WinMDIntPtrRule</Message>
+            <Category>WinRTSupport</Category>
+        </WinMdIntPtrRule>
+
+        <ValueTypeDefaultConstructorRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_ValueTypeDefaultConstructorRule</Message>
+            <Category>LanguageFeatures</Category>
+        </ValueTypeDefaultConstructorRule>
+
+        <ObfuscatorDetectionRule on="true">
+          <ErrorLevel>warning</ErrorLevel>
+          <Message>Rule_ObfuscatorDetectionRule</Message>
+          <Category>RuntimeSupport</Category>
+        </ObfuscatorDetectionRule>
+
+      <WinMDDefaultAttributeRule on="true">
+          <ErrorLevel>error</ErrorLevel>
+          <Message>Rule_WinMDDefaultAttributeRule</Message>
+          <Category>WinRTSupport</Category>
+        </WinMDDefaultAttributeRule>
+
+        <EqualsMismatchRule on="true">
+          <ErrorLevel>warning</ErrorLevel>
+          <Message>Rule_EqualsMismatchRule</Message>
+          <Category>FrameworkClassesOrMethods</Category>
+        </EqualsMismatchRule>
+
+        <DuplicateMemberRule on="true">
+          <ErrorLevel>warning</ErrorLevel>
+          <Message>Rule_DuplicateMemberRule</Message>
+          <Category>RuntimeSupport</Category>
+        </DuplicateMemberRule>
+
+        <FSharpRule on="true">
+          <ErrorLevel>error</ErrorLevel>
+          <Message>Rule_FSharpRule</Message>
+          <Category>FSharp</Category>
+        </FSharpRule>
+
+        <UnsupportedMefVersionRule on="true">
+          <ErrorLevel>error</ErrorLevel>
+          <Message>Rule_UnsupportedMefVersionRule</Message>
+          <Category>MEF</Category>
+        </UnsupportedMefVersionRule>
+
+        <TailCallRule on="true">
+          <ErrorLevel>warning</ErrorLevel>
+          <Message>Rule_TailCallRule</Message>
+          <Category>RuntimeSupport</Category>
+        </TailCallRule>
+
+        <MixedModeAssemblyRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_MixedModeAssemblyRule</Message>
+            <Category>RuntimeSupport</Category>
+        </MixedModeAssemblyRule>
+
+        <EmptyNameValidationRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_EmptyNameValidationRule</Message>
+            <Category>RuntimeSupport</Category>
+        </EmptyNameValidationRule>
+
+        <GenericNameValidationRule on="true">
+            <ErrorLevel>error</ErrorLevel>
+            <Message>Rule_GenericNameValidationRule</Message>
+            <Category>RuntimeSupport</Category>
+        </GenericNameValidationRule>
+    </ChecksToRun>
+    
+    <unsupported>
+        <types>
+            <type>T:System.Runtime.InteropServices.BStrWrapper</type>
+            <type>T:System.Runtime.InteropServices.CurrencyWrapper</type>
+            <type>T:System.Runtime.InteropServices.DispatchWrapper</type>
+            <type>T:System.Runtime.InteropServices.ErrorWrapper</type>
+            <type>T:System.Runtime.InteropServices.UnknownWrapper</type>
+            <type>T:System.Runtime.InteropServices.VariantWrapper</type>
+            <type>T:System.Runtime.InteropServices.ComDefaultInterfaceAttribute</type>
+            <type>T:System.Runtime.InteropServices.ComEventsHelper</type>
+            <type>T:System.Runtime.InteropServices.ComSourceInterfacesAttribute</type>
+            <type>T:System.Runtime.InteropServices.ICustomQueryInterface</type>
+            <type>T:System.Runtime.InteropServices.CustomQueryInterfaceMode</type>
+            <type>T:System.Runtime.InteropServices.CustomQueryInterfaceResult</type>
+            <type>T:System.Runtime.InteropServices.ICustomAdapter</type>
+            <type>T:System.Runtime.InteropServices.SafeBuffer</type>
+        </types>
+
+        <methods>
+            <method>M:System.Assembly.GetTypes()</method>
+            <method>M:System.Delegate.Equals(System.Object)</method>
+            <method>M:System.Delegate.get_Method()</method>
+            <method>M:System.Diagnostics.Debugger.Launch</method>
+            <method>M:System.Reflection.PropertyInfo.GetAccessors(bool)</method>
+
+            <method>M:System.RuntimeFieldHandle.op_Inequality(System.RuntimeFieldHandle,System.RuntimeFieldHandle)</method>
+            <method>M:System.RuntimeFieldHandle.op_Equality(System.RuntimeFieldHandle,System.RuntimeFieldHandle)</method>
+            <method>M:System.RuntimeFieldHandle.Equals(System.RuntimeFieldHandle)</method>
+            <method>M:System.RuntimeFieldHandle.Equals(System.Object)</method>
+            <method>M:System.RuntimeFieldHandle.GetHashCode</method>
+            <method>M:System.RuntimeMethodHandle.Equals(System.Object)</method>
+            <method>M:System.RuntimeMethodHandle.Equals(System.RuntimeMethodHandle)</method>
+            <method>M:System.RuntimeMethodHandle.GetHashCode</method>
+            <method>M:System.RuntimeMethodHandle.op_Inequality(System.RuntimeMethodHandle,System.RuntimeMethodHandle)</method>
+            <method>M:System.RuntimeMethodHandle.op_Equality(System.RuntimeMethodHandle,System.RuntimeMethodHandle)</method>
+
+            <!-- System.Net.Http -->
+            <method>M:System.Net.Http.RtcRequestFactory.Create(System.Net.Http.HttpMethod,System.Uri)</method>
+
+            <!-- System.Private.Interop -->
+            <method>M:System.Runtime.InteropServices.ComAwareEventInfo.AddEventHandler(System.Object,System.Delegate)</method>
+            <method>M:System.Runtime.InteropServices.ComAwareEventInfo.get_Attributes</method>
+            <method>M:System.Runtime.InteropServices.ComAwareEventInfo.get_DeclaringType</method>
+            <method>M:System.Runtime.InteropServices.ComAwareEventInfo.get_Name</method>
+            <method>M:System.Runtime.InteropServices.ComAwareEventInfo.RemoveEventHandler(System.Object,System.Delegate)</method>
+            <method>M:System.Runtime.InteropServices.ComEventsHelper.Combine(System.Object,System.Guid,System.Int32,System.Delegate)</method>
+            <method>M:System.Runtime.InteropServices.ComEventsHelper.Remove(System.Object,System.Guid,System.Int32,System.Delegate)</method>
+            <method>M:System.Runtime.InteropServices.DispatchWrapper.get_WrappedObject</method>
+            <method>M:System.Runtime.InteropServices.Marshal.AreComObjectsAvailableForCleanup</method>
+            <method>M:System.Runtime.InteropServices.Marshal.CreateAggregatedObject(System.IntPtr,System.Object)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.CreateWrapperOfType(System.Object,System.Type)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.GetComInterfaceForObject(System.Object,System.Type)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.GetComInterfaceForObject(System.Object,System.Type,System.Runtime.InteropServices.CustomQueryInterfaceMode)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.GetExceptionCode</method>
+            <method>M:System.Runtime.InteropServices.Marshal.GetStartComSlot(System.Type)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.GetTypeInfoName(System.Runtime.InteropServices.ComTypes.ITypeInfo)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.ReadByte(System.Object,System.Int32)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.ReadInt16(System.Object,System.Int32)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.ReadInt32(System.Object,System.Int32)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.ReadInt64(System.Object,System.Int32)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.ReadIntPtr(System.Object,System.Int32)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.WriteByte(System.Object,System.Int32,System.Byte)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.WriteInt16(System.Object,System.Int32,System.Int16)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.WriteInt32(System.Object,System.Int32,System.Int32)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.WriteInt64(System.Object,System.Int32,System.Int64)</method>
+            <method>M:System.Runtime.InteropServices.Marshal.WriteIntPtr(System.Object,System.Int32,System.IntPtr)</method>
+
+            <!-- System.Private.PortableServiceModelThunks -->
+            <method>M:System.ServiceModel.Description.OperationDescription.get_BeginMethod</method>
+            <method>M:System.ServiceModel.Description.OperationDescription.get_EndMethod</method>
+            <method>M:System.ServiceModel.Description.OperationDescription.get_SyncMethod</method>
+            <method>M:System.ServiceModel.Description.OperationDescription.set_BeginMethod(System.Reflection.MethodInfo)</method>
+            <method>M:System.ServiceModel.Description.OperationDescription.set_EndMethod(System.Reflection.MethodInfo)</method>
+            <method>M:System.ServiceModel.Description.OperationDescription.set_SyncMethod(System.Reflection.MethodInfo)</method>
+            <method>M:System.ServiceModel.Dispatcher.ClientOperation.get_BeginMethod</method>
+            <method>M:System.ServiceModel.Dispatcher.ClientOperation.get_EndMethod</method>
+            <method>M:System.ServiceModel.Dispatcher.ClientOperation.get_SyncMethod</method>
+            <method>M:System.ServiceModel.Dispatcher.ClientOperation.set_BeginMethod(System.Reflection.MethodInfo)</method>
+            <method>M:System.ServiceModel.Dispatcher.ClientOperation.set_EndMethod(System.Reflection.MethodInfo)</method>
+            <method>M:System.ServiceModel.Dispatcher.ClientOperation.set_SyncMethod(System.Reflection.MethodInfo)</method>
+            <method>M:System.ServiceModel.ServiceKnownTypeAttribute.#ctor(System.String,System.Type)</method>
+            
+            <!-- System.Private.PortableThunks -->
+            <method>M:System.Globalization.TextInfo.get_ANSICodePage</method>
+            <method>M:System.IO.Stream.BeginWrite(System.Byte[],System.Int32,System.Int32,System.AsyncCallback,System.Object)</method>
+            <method>M:System.IO.Stream.EndWrite(System.IAsyncResult)</method>
+            <method>M:System.Reflection.Assembly.get_EntryPoint</method>
+            <method>M:System.Reflection.Assembly.GetCallingAssembly</method>
+            <method>M:System.Reflection.Assembly.GetManifestResourceStream(System.Type,System.String)</method>
+            <method>M:System.Reflection.EventInfo.get_IsMulticast</method>
+            <method>M:System.Reflection.FieldInfo.get_FieldHandle</method>
+            <method>M:System.Reflection.MemberInfo.get_ReflectedType</method>
+            <method>M:System.Reflection.MethodBase.get_MethodHandle</method>
+            <method>M:System.Reflection.ParameterInfo.get_IsLcid</method>
+            <method>M:System.StringComparer.Create(System.Globalization.CultureInfo,System.Boolean)</method>
+            <method>M:System.Type.get_UnderlyingSystemType</method>
+            <method>M:System.Type.GetTypeFromCLSID(System.Guid)</method>
+            <method>M:System.Type.get_GenericParameterAttributes()</method>
+            <method>M:System.Threading.Thread.set_CurrentCulture(System.Globalization.CultureInfo)</method>
+            <method>M:System.Threading.Thread.set_CurrentUICulture(System.Globalization.CultureInfo)</method>
+
+            <!-- System.Private.Reflection.Core -->
+            <method>M:Internal.Reflection.Core.ReflectionDomain.LoadAssembly(System.Reflection.AssemblyName)</method>
+          
+            <!-- System.Reflection.Context -->
+            <method>M:System.Reflection.Context.CustomReflectionContext.MapAssembly(System.Reflection.Assembly)</method>
+            <method>M:System.Reflection.Context.CustomReflectionContext.MapType(System.Reflection.TypeInfo)</method>
+
+            <!-- System.Xml.Serialization -->
+            <method>M:System.Xml.Serialization.XmlSerializer.#ctor(System.Type,System.Xml.Serialization.XmlRootAttribute)</method>
+            <method>M:System.Xml.Serialization.XmlSerializer.#ctor(System.Type,System.Xml.Serialization.XmlAttributeOverrides)</method>
+            <method>M:System.Xml.Serialization.XmlSerializer.#ctor(System.Type,System.Xml.Serialization.XmlAttributeOverrides,System.Type[],System.Xml.Serialization.XmlRootAttribute,System.String)</method>
+        </methods>
+        
+        <contracts>
+        </contracts>
+    </unsupported> 
+</config>

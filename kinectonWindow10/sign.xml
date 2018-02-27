@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<signs>
+<sign>
+    <label>0</label>
+    <text>Circle</text>  
+</sign>
+  <sign>
+    <label>1</label>
+    <text>Piano</text>
+</sign>
+  <sign>
+    <label>2</label>
+    <text>Animal</text>
+  </sign>
+</signs>

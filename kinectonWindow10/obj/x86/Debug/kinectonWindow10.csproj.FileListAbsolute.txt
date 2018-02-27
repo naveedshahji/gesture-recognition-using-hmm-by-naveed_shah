@@ -1,0 +1,184 @@
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\App.g.i.cs
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\App.g.cs
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\MainPage.g.i.cs
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\MainPage.g.cs
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\XamlTypeInfo.g.cs
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\App.xaml
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\MainPage.xaml
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\App.xbf
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\MainPage.xbf
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\XamlSaveStateFile.xml
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\App.xbf
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\MainPage.xbf
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\kinectonWindow10.xr.xml
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\kinectonWindow10.exe
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\kinectonWindow10.pdb
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\resources.pri
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\AppxManifest.xml
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\bin\x86\Debug\kinectonWindow10.build.appxrecipe
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\kinectonWindow10.exe
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\kinectonWindow10.pdb
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\priconfig.xml
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\priconfig.xml.intermediate
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\layout.resfiles
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\layout.resfiles.intermediate
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\resources.resfiles
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\resources.resfiles.intermediate
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\pri.resfiles
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\pri.resfiles.intermediate
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\qualifiers.txt
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\qualifiers.txt.intermediate
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\MultipleQualifiersPerDimensionFound.txt
+C:\Users\Naveed\Desktop\kinectonWindow10\kinectonWindow10\obj\x86\Debug\ProjectArchitectures.txt
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\App.xbf
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\MainPage.xbf
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.xr.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.exe
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\resources.pri
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\AppxManifest.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.build.appxrecipe
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.dll
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.dll
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.dll
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\AForge.dll
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.dll
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.pri
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.pri
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.g.i.cs
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.g.cs
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.g.i.cs
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.g.cs
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\XamlTypeInfo.g.cs
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.xaml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.xaml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.xbf
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.xbf
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\XamlSaveStateFile.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.exe
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.csproj.GenerateResource.Cache
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\priconfig.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\priconfig.xml.intermediate
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\layout.resfiles
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\layout.resfiles.intermediate
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\resources.resfiles
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\resources.resfiles.intermediate
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\pri.resfiles
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\pri.resfiles.intermediate
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\qualifiers.txt
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\qualifiers.txt.intermediate
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MultipleQualifiersPerDimensionFound.txt
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\Accord.pri.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\Shim.pri.xml
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\ProjectArchitectures.txt
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.csprojResolveAssemblyReference.cache
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\App.xbf
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\MainPage.xbf
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.xr.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.exe
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.pdb
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\resources.pri
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\AppxManifest.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.build.appxrecipe
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.dll
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.dll
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.dll
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\AForge.dll
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.dll
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.pdb
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.pri
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.pdb
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.pdb
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.pdb
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.pri
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.csprojResolveAssemblyReference.cache
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.g.i.cs
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.g.cs
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.g.i.cs
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.g.cs
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\XamlTypeInfo.g.cs
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.xaml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.xaml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.xbf
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.xbf
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\XamlSaveStateFile.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.exe
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.pdb
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.csproj.GenerateResource.Cache
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\priconfig.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\priconfig.xml.intermediate
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\layout.resfiles
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\layout.resfiles.intermediate
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\resources.resfiles
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\resources.resfiles.intermediate
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\pri.resfiles
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\pri.resfiles.intermediate
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\qualifiers.txt
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\qualifiers.txt.intermediate
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MultipleQualifiersPerDimensionFound.txt
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\Accord.pri.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\Shim.pri.xml
+G:\ABC Desktop lates\kinect code\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\ProjectArchitectures.txt
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\App.xbf
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\MainPage.xbf
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.xr.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.exe
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.pdb
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\resources.pri
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\AppxManifest.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\kinectonWindow10.build.appxrecipe
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.dll
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.dll
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.dll
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.dll
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.pdb
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.pri
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.pdb
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Math.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.pdb
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Accord.Statistics.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.pdb
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\bin\x86\Debug\Shim.pri
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.g.i.cs
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.g.cs
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.g.i.cs
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.g.cs
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\XamlTypeInfo.g.cs
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.xaml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.xaml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\App.xbf
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MainPage.xbf
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\XamlSaveStateFile.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.exe
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.pdb
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.csproj.GenerateResource.Cache
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\priconfig.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\priconfig.xml.intermediate
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\layout.resfiles
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\layout.resfiles.intermediate
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\resources.resfiles
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\resources.resfiles.intermediate
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\pri.resfiles
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\pri.resfiles.intermediate
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\qualifiers.txt
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\qualifiers.txt.intermediate
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\MultipleQualifiersPerDimensionFound.txt
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\Accord.pri.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\Shim.pri.xml
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\ProjectArchitectures.txt
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\obj\x86\Debug\kinectonWindow10.csprojResolveAssemblyReference.cache

@@ -1,0 +1,7 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectNTargets>$(MSBuildThisFileDirectory)..\tools\Microsoft.NetNative.targets</ProjectNTargets>
+    <ProjectNSettingsTargets>$(MSBuildThisFileDirectory)..\tools\Microsoft.NetNative.Settings.targets</ProjectNSettingsTargets>
+    <UseNugetInstall>true</UseNugetInstall>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <AppxPackageRegistration Include="$(MSBuildThisFileDirectory)..\tools\SharedLibrary\ret\Native\Microsoft.NET.Native.Framework.1.6.appx" Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(UseDotNetNativeToolchain)' == 'true'">
+      <Configuration>Release</Configuration>
+      <Architecture>x86</Architecture>
+      <Version>1.6.24903.0</Version>
+      <Publisher>'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'</Publisher>
+    </AppxPackageRegistration>
+    <AppxPackageRegistration Include="$(MSBuildThisFileDirectory)..\tools\SharedLibrary\chk\Native\Microsoft.NET.Native.Framework.Debug.1.6.appx" Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(UseDotNetNativeToolchain)' == 'true'">
+      <Configuration>Debug</Configuration>
+      <Architecture>x86</Architecture>
+      <Version>1.6.24903.0</Version>
+      <Publisher>'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'</Publisher>
+    </AppxPackageRegistration>
+  </ItemGroup>
+</Project>

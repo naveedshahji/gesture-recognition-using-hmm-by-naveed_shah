@@ -1,0 +1,13 @@
+<XamlCompilerSaveState>
+  <ReferenceAssemblyList>
+    <LocalAssembly PathName="g:\thesis and related papers\kinect head and neck detect\kinectonwindow10\obj\x86\debug\intermediatexaml\kinectonwindow10.exe" HashGuid="a7df4bb9-6855-362e-c925-58e23993bc6f" />
+    <ReferenceAssembly PathName="c:\program files (x86)\microsoft sdks\windows\v8.1\extensionsdks\microsoft.vclibs\12.0\references\commonconfiguration\neutral\platform.winmd" HashGuid="58b6b6d1-928e-9908-9804-eb460e5e101b" />
+    <ReferenceAssembly PathName="c:\program files (x86)\microsoft sdks\windows\v8.1\extensionsdks\windowspreview.kinect\2.0\references\commonconfiguration\neutral\windowspreview.data.winmd" HashGuid="bec3b354-5b74-1234-191f-25a435755c0a" />
+    <ReferenceAssembly PathName="c:\program files (x86)\microsoft sdks\windows\v8.1\extensionsdks\windowspreview.kinect\2.0\references\commonconfiguration\neutral\windowspreview.kinect.winmd" HashGuid="d7412096-a3c7-9108-a946-0ff0cc614d3f" />
+    <ReferenceAssembly PathName="g:\thesis and related papers\kinect head and neck detect\packages\portable.accord.core.3.1.0-pre\lib\netcore451\accord.dll" HashGuid="7d68eb98-f496-a114-454c-412ad83911a2" />
+    <ReferenceAssembly PathName="g:\thesis and related papers\kinect head and neck detect\packages\portable.accord.math.3.1.0-pre\lib\portable-net45+netcore45+wpa81\accord.math.dll" HashGuid="d0282f3c-b238-71c3-1d6b-d6744cc8ab6e" />
+    <ReferenceAssembly PathName="g:\thesis and related papers\kinect head and neck detect\packages\portable.accord.statistics.3.1.0-pre\lib\portable-net45+netcore45+wpa81\accord.statistics.dll" HashGuid="2026ee8d-8684-8332-1462-25182747b912" />
+    <ReferenceAssembly PathName="g:\thesis and related papers\kinect head and neck detect\kinectonwindow10\bin\x86\debug\aforge.dll" HashGuid="137c8552-b141-17b5-2292-8faaeaa6a65d" />
+    <ReferenceAssembly PathName="g:\thesis and related papers\kinect head and neck detect\packages\shim.2.1.0-pre\lib\netcore451\shim.dll" HashGuid="77ed5285-752a-bf23-d68d-bb3f4668deda" />
+  </ReferenceAssemblyList>
+</XamlCompilerSaveState>

@@ -1,0 +1,2192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="IlcInternals.settings.targets" />
+
+  <PropertyGroup>
+    <TargetExtBase>dll</TargetExtBase>
+    <TargetExtBase Condition="'$(OutputType)'=='exe' or '$(OutputType)'=='winexe' or '$(OutputType)'=='AppContainerExe'">exe</TargetExtBase>
+    <TargetExt>.$(TargetExtBase)</TargetExt>
+
+    <!-- Setup the default core assembly --> 
+    <CoreAssemblyName>$(FixedCoreAssemblyName)</CoreAssemblyName>
+
+    <EnableWinRT Condition="'InternalFeatureSwitch_DisableWinRT'=='true'">false</EnableWinRT>
+    <EnableWinRT Condition="'InternalFeatureSwitch_DisableWinRT'!='true'">true</EnableWinRT>
+
+    <McgWinMDImport Condition="'$(EnableWinRT)'=='true'">true</McgWinMDImport>
+    <ILToolchainDll>$(FrameworkPrivatePath)System.Private.ILToolchain.dll</ILToolchainDll>
+    <ReferenceILPath>$(FrameworkILPath)</ReferenceILPath>
+    <ReferenceILExt>dll</ReferenceILExt>
+
+    <!-- Whether to do global analysis and compilation to MDIL in the same NUTC process -->
+    <MultifileSingleProcess Condition="'$(BuildSharedAssemblies)'=='true' and '$(MergeSharedAssemblies)'=='true'">true</MultifileSingleProcess>
+    <MultifileSingleProcess Condition="'$(UseSharedAssemblies)'=='true' and '$(MergeNonSharedAssemblies)'=='true'">true</MultifileSingleProcess>
+    <MultifileNoGlobalAnalysis Condition="'$(UseSharedAssemblies)'=='true' and '$(BuildSharedAssemblies)'!='true' and '$(MergeNonSharedAssemblies)'=='true' and '$(NoTocGeneration)'=='true'">true</MultifileNoGlobalAnalysis>   
+  </PropertyGroup>
+
+  <ItemGroup>
+    <BinaryContents Include="$(MergeSpecifications)" Condition="'$(MultiFile)' == 'true'">
+      <Binary>$([System.String]::new('%(Identity)').Split('=', 2)[0])</Binary>
+      <AssemblyName>$([System.String]::new('%(Identity)').Split('=', 2)[1])</AssemblyName>
+    </BinaryContents>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The AssemblyClosureTask needs to know which set of framework assemblies should be preferred
+         in case it encounters assemblies of the same name at different paths. This can happen, for
+         example, if the developer has provided a patched System.Private.* assembly; we want to prefer
+         the copy in their app package rather than the one that came with the toolchain. However, this
+         isn't useful when building the the shared assembly. -->
+    <PreferredFrameworkAssemblies Include="@(FrameworkImplementationAssemblies)" Condition="'$(BuildSharedAssemblies)' != 'true' and '$(UseSharedAssemblies)' != 'true'" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <InputAppxManifest Condition="'$(InputPath)' != ''">$(InputPath)\AppxManifest.xml</InputAppxManifest>
+    <ShouldRunInAppx>true</ShouldRunInAppx>
+    <ShouldRunInAppx Condition="!Exists('$(InputAppxManifest)')">false</ShouldRunInAppx>
+  </PropertyGroup>
+
+  <!-- Setup all the exact paths -->
+  <PropertyGroup>
+    <IntermediatePreMergeILTransformedPath>$(IntermediateOutputPath)PreMergeILTransformed\</IntermediatePreMergeILTransformedPath>
+    <IntermediateTransformedCoreLibPath>$(IntermediateOutputPath)TransformedCoreLib\</IntermediateTransformedCoreLibPath>
+    <IntermediateTransformedSystemRuntimeWindowsRuntimePath>$(IntermediateOutputPath)TransformedSRWR\</IntermediateTransformedSystemRuntimeWindowsRuntimePath>
+    <IntermediateResourcesPath>$(IntermediateOutputPath)Resources\</IntermediateResourcesPath>
+    <IntermediateAppxManifest>$(IntermediateOutputPath)AppxManifest.xml</IntermediateAppxManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <IntermediatePreMergeILTransformedExeTarget Include="$(IntermediatePreMergeILTransformedPath)$(AssemblyName).$(TargetExtBase)" />
+    <IntermediatePreMergeILTransformedExeSymbols Include="$(IntermediatePreMergeILTransformedPath)$(AssemblyName).pdb" />
+    <IntermediateILMergedTarget Include="$(ILTransformedIntermediatePath)$(AssemblyName).ILMerged.il$(TargetExtBase)" />
+    <IntermediateILMergedSymbols Include="$(ILTransformedIntermediatePath)$(AssemblyName).ILMerged.ilpdb" />
+    <IntermediateILTransformedTarget Include="$(ILTransformedIntermediatePath)$(AssemblyName).il$(TargetExtBase)"/>
+    <IntermediateILTransformedSymbols Include="$(ILTransformedIntermediatePath)$(AssemblyName).ilpdb" />
+  </ItemGroup>
+
+  <UsingTask TaskName="ILTransformTask"        AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="GetPriTargetVersionAndLanguageTask" AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="ModifyPriConfigFile"    AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="AssemblyClosureTask"    AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="ResolveFilePathTask"    AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="BinaryConcatenateTask"  AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="StartProcessTask"       AssemblyName="Microsoft.Build.ILTasks"/>
+  <UsingTask TaskName="AddToNativePackageTask" AssemblyFile="$(MsBuildThisFileDirectory)ilc.exe"/>
+  <UsingTask TaskName="TransformAppxManifestTask" AssemblyFile="$(MsBuildThisFileDirectory)ilc.exe"/>
+  <UsingTask TaskName="IlcErrorTask"           AssemblyFile="$(MsBuildThisFileDirectory)ilc.exe"/>
+  <UsingTask TaskName="IlcWarningTask"         AssemblyFile="$(MsBuildThisFileDirectory)ilc.exe"/>
+  <UsingTask TaskName="IlcMessageTask"         AssemblyFile="$(MsBuildThisFileDirectory)ilc.exe"/>
+  <UsingTask TaskName="ValidateSimpleNamesTask" AssemblyFile="$(MsBuildThisFileDirectory)ilc.exe"/>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Generates the serialization assembly. -->
+  <!-- ####################################################################################################################### -->
+  <PropertyGroup>
+    <SGGeneratedPath>$(IntermediateOutputPath)SgGenerated</SGGeneratedPath>
+    <ComputedSerializationGeneratorInput>$(IntermediatePreMergeILTransformedPath)ComputedSerializationInput.txt</ComputedSerializationGeneratorInput>
+    <SRSGeneratedPath>$(SGGeneratedPath)\System.Runtime.Serialization.Generated.dll</SRSGeneratedPath>
+    <SRSGeneratedSymbols>$(SGGeneratedPath)\System.Runtime.Serialization.Generated.pdb</SRSGeneratedSymbols>
+    <SRSGeneratedIntermediatePath>$(SGGeneratedPath)\System.Runtime.Serialization.Generated.Intermediate.dll</SRSGeneratedIntermediatePath>
+    <SXXSGeneratedPath>$(SGGeneratedPath)\System.Xml.XmlSerializer.Generated.dll</SXXSGeneratedPath>
+    <SXXSGeneratedSymbols>$(SGGeneratedPath)\System.Xml.XmlSerializer.Generated.pdb</SXXSGeneratedSymbols>
+
+  </PropertyGroup>
+  <!-- ####################################################################################################################### -->
+  <!-- Log the AppContextSwitches that were passed in. -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="LogAppContextSwitches" BeforeTargets="SetMainTargetPaths" >
+    <Message Text="AppContextSwitch: '%(AppContextSwitches.Identity)'"/>
+    <PropertyGroup>
+      <AutoDetectNonStandardEncoding  Condition="'%(AppContextSwitches.Identity)' == 'Compat.AutoDetectNonStandardEncoding'" >true</AutoDetectNonStandardEncoding>
+    </PropertyGroup>
+  </Target>
+  
+  <!-- ####################################################################################################################### -->
+  <!--  Set main target paths -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="SetMainTargetPaths">
+    <PropertyGroup>
+      <!-- Figure out the binary name for the main, core, and interop assemblies -->
+      <MainBinaryName>$(AssemblyName)</MainBinaryName>
+      <MainBinaryName Condition="'$(MainBinaryName)'=='%(BinaryContents.AssemblyName)'">%(BinaryContents.Binary)</MainBinaryName>
+      <MainBinaryName Condition="'$(BuildSharedAssemblies)' == 'true'">$(FixedCoreAssemblyName)</MainBinaryName>
+      <MainBinaryName Condition="'$(BuildSharedAssemblies)' == 'true' and '$(MergeSharedAssemblies)' == 'true'">$(SharedAssembliesBinaryName)</MainBinaryName>
+
+      <HaveMergedSharedAssemblies>false</HaveMergedSharedAssemblies>
+      <HaveMergedSharedAssemblies Condition="('$(BuildSharedAssemblies)' == 'true' or '$(UseSharedAssemblies)' == 'true') and ('$(MergeSharedAssemblies)' == 'true')">true</HaveMergedSharedAssemblies>
+
+      <MergeAllAssemblies>false</MergeAllAssemblies>
+      <MergeAllAssemblies Condition="('$(BuildSharedAssemblies)' != 'true' and '$(UseSharedAssemblies)' != 'true') and ('$(MergeNonSharedAssemblies)' == 'true')">true</MergeAllAssemblies>
+
+      <FixedCoreBinaryName>$(FixedCoreAssemblyName)</FixedCoreBinaryName>
+      <FixedCoreBinaryName Condition="'$(FixedCoreAssemblyName)'=='%(BinaryContents.AssemblyName)'">%(BinaryContents.Binary)</FixedCoreBinaryName>
+      <FixedCoreBinaryName Condition="'$(HaveMergedSharedAssemblies)' == 'true'">$(CoreSharedLibraryName)</FixedCoreBinaryName>
+      <FixedCoreBinaryName Condition="'$(MergeAllAssemblies)' == 'true'">$(MainBinaryName)</FixedCoreBinaryName>
+
+      <InteropBinaryName>$(InteropAssemblyName)</InteropBinaryName>
+      <InteropBinaryName Condition="'$(InteropAssemblyName)'=='%(BinaryContents.AssemblyName)'">%(BinaryContents.Binary)</InteropBinaryName>
+      <InteropBinaryName Condition="'$(HaveMergedSharedAssemblies)' == 'true'">$(CoreSharedLibraryName)</InteropBinaryName>
+      <InteropBinaryName Condition="'$(MergeAllAssemblies)' == 'true'">$(MainBinaryName)</InteropBinaryName>
+      
+      <TypeLoaderBinaryName>$(TypeLoaderAssemblyName)</TypeLoaderBinaryName>
+      <TypeLoaderBinaryName Condition="'$(TypeLoaderAssemblyName)'=='%(BinaryContents.AssemblyName)'">%(BinaryContents.Binary)</TypeLoaderBinaryName>
+      <TypeLoaderBinaryName Condition="'$(HaveMergedSharedAssemblies)' == 'true'">$(CoreSharedLibraryName)</TypeLoaderBinaryName>
+      <TypeLoaderBinaryName Condition="'$(MergeAllAssemblies)' == 'true'">$(MainBinaryName)</TypeLoaderBinaryName>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <IntermediateMDILTarget Include="$(MDILIntermediatePath)$(MainBinaryName).mdil$(TargetExtBase)" />
+      <IntermediateMDILSymbols Include="$(MDILIntermediatePath)$(MainBinaryName).mdilpdb" />
+      <IntermediateNativeTarget Include="$(NativeIntermediatePath)$(MainBinaryName)$(TargetExt)" Condition="'$(BuildSharedAssemblies)' != 'true'" />
+      <IntermediateRhBindMap Include="$(NativeIntermediatePath)$(MainBinaryName).map" />
+    </ItemGroup>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!--  Merge the resources of the app and the framework   -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="InitInputResourceName">
+      <ResolveFilePathTask
+          InputFileNames="resources.pri"
+          DirectorySearchList="$(InputPath)\obj\"
+          Condition="'$(InputPath)' != '' and Exists('$(InputPath)\obj\')">
+        <Output TaskParameter="ResolvedFilePaths" ItemName="AppResources" />
+        <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedReflectionCoreFilePath" />
+      </ResolveFilePathTask>
+
+      <ResolveFilePathTask
+          InputFileNames="resources.pri"
+          DirectorySearchList="$(InputPath)\"
+          Condition="'$(InputPath)' != '' and '@(AppResources)'==''">
+        <Output TaskParameter="ResolvedFilePaths" ItemName="AppResources" />
+        <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedReflectionCoreFilePath" />
+      </ResolveFilePathTask>
+
+      <PropertyGroup>
+        <!--
+          In case of store app, if the app don't have resources then we'll not merge the framework resources to the app and
+          instead we'll run the IL transformer ExceptionMiniaturizer which cause the app to use the resource keys instead of actual resource strings
+        -->
+        <StoreAppWithEmptyResources Condition="'@(AppResources)' == '' And '$(InputPath)' != '' And Exists('$(InputPath)\AppxManifest.xml')">true</StoreAppWithEmptyResources>
+        <UseResKeysInsteadOfResStrings Condition="'$(StoreAppWithEmptyResources)'=='true' Or '$(DeveloperExperienceMode)' != 'true'">true</UseResKeysInsteadOfResStrings>
+        <UseResKeysInsteadOfResStrings Condition="'$(UseResKeysInsteadOfResStrings)'!='true'">false</UseResKeysInsteadOfResStrings>
+      </PropertyGroup>
+    
+  </Target>
+
+  <!-- 
+      in retail builds /BuildType:ret is passed to ILC which make DeveloperExperienceMode != true, the IL transformer ExceptionMiniaturizer 
+      should run at that time and we'll not include the framework resources in the app package.
+  -->
+  <Target Name="MergeFrameworkReswFilesWithTheAppPriFile" Condition="'@(AppResources)' != '' And '$(UseResKeysInsteadOfResStrings)' != 'true'">
+      <IlcErrorTask Condition="'$(MakePriPath)' == ''" ResourceName="Error_MissingMakePriPath" />
+
+      <ItemGroup Condition="'$(UseSharedAssemblies)' == 'true' and '$(BuildSharedAssemblies)' != 'true'">
+        <InputSharedReswFiles Include="%(InputSharedAssemblyPaths.Identity)\$(SharedAssemblyResWFolderName)\*.resw" />
+      </ItemGroup>
+
+      <!-- There seems to be an internal bug in MakePri due to which it non-deterministically crashes -->
+      <!-- when presented with list of resw files residing in different folders. Therefore we copy -->
+      <!-- the previously produced resw files for all input shared libraries to the intermediate\ResW folder -->
+      <!-- and we create the FrameworkReswFiles list to be passed to MakePri only from this one folder. -->
+      <!-- The resw file names should always be disjunct because they are derived from assembly names -->
+      <!-- and there may not be two assemblies with the same simple name in one ILC build -->
+      <!-- (including prebuilt shareable assemblies consumed through shared libraries). -->
+      <Copy
+        SourceFiles="@(InputSharedReswFiles)"
+        DestinationFiles="@(InputSharedReswFiles -> '$(IntermediateResWPath)%(Filename).resw')"
+        Condition="'@(InputSharedReswFiles)' != ''" />
+
+      <ItemGroup>
+        <FrameworkReswFiles Include="$(IntermediateResWPath)*.resw" />
+      </ItemGroup>
+
+      <PropertyGroup>
+        <AbsoluteIntermediatePath>$([System.IO.Path]::GetDirectoryName('$(IntermediateOutputPath)'))</AbsoluteIntermediatePath>
+        <PriFileListResFiles>$(AbsoluteIntermediatePath)\filelist.resfiles</PriFileListResFiles>
+        <ResWFileListResFiles>$(AbsoluteIntermediatePath)\ResWfilelist.resfiles</ResWFileListResFiles>
+        <ResourcePriFile>$(AbsoluteIntermediatePath)\resources.pri</ResourcePriFile>
+        <PriConfigurationFilePath>$(AbsoluteIntermediatePath)\PriConfig.xml</PriConfigurationFilePath>
+        <PriDumpFile>$(AbsoluteIntermediatePath)\OriginalPriDumpFile.xml</PriDumpFile>
+      </PropertyGroup>
+      
+      <!--  We need to dump the original app Pri file to get the target platform, OS version and default language -->
+      <ItemGroup>
+        <MakePriDumpCmd Include="$(MakePriPath)">
+          <Arguments>dump /if "@(AppResources)" /of "$(PriDumpFile)" /dt Detailed /o</Arguments>
+          <DisplayName>makepri dump</DisplayName>
+        </MakePriDumpCmd>
+      </ItemGroup>
+      <StartProcessTask Commands="@(MakePriDumpCmd)" StandardOutputImportance="low" />
+      
+      <GetPriTargetVersionAndLanguageTask PriXmlDumpFile="$(PriDumpFile)">
+        <Output PropertyName="ResourcesOSTargetVersion" TaskParameter="TargetOSVersion" />
+        <Output PropertyName="ResourcesDefaultLanguage" TaskParameter="DefaultLanguage" />
+        <Output PropertyName="ResourcesTargetPlatform"  TaskParameter="TargetPlatform" />
+      </GetPriTargetVersionAndLanguageTask>
+      
+      <!--  Generate the Pri config file match the target OS version -->
+      <PropertyGroup>
+        <GeneratedPriConfigFile>$(AbsoluteIntermediatePath)\GeneratedPriConif.xml</GeneratedPriConfigFile>
+      </PropertyGroup>
+      <ItemGroup>
+        <MakePriCreateConfigCmd Include="$(MakePriPath)">
+          <Arguments>createconfig /o /cf "$(GeneratedPriConfigFile)" /pv "$(ResourcesOSTargetVersion)" /dq "$(ResourcesDefaultLanguage)"</Arguments>
+          <DisplayName>makepri createconfig</DisplayName>
+        </MakePriCreateConfigCmd>
+      </ItemGroup>
+      <StartProcessTask Commands="@(MakePriCreateConfigCmd)" StandardOutputImportance="low" />
+      
+      <!-- Create the list file -->      
+      <WriteLinesToFile  File="$(PriFileListResFiles)" Lines="@(AppResources)" Overwrite="true"/>
+      <WriteLinesToFile  File="$(ResWFileListResFiles)"  Lines="@(FrameworkReswFiles)" Overwrite="true"/>
+      
+      <ModifyPriConfigFile 
+          GeneratedPriConfigFile="$(GeneratedPriConfigFile)"
+          ResWListFile = "$(ResWFileListResFiles)"
+          PriListFile = "$(PriFileListResFiles)"
+          PriDefaultLanguage = "$(ResourcesDefaultLanguage)"
+          ResWDefaultLanguage = "en-US" 
+          ModifiedPriConfigFile = "$(PriConfigurationFilePath)" 
+          TargetPlatform="$(ResourcesTargetPlatform)" />
+
+      <!-- Prepare MakePri Parameters -->
+      <PropertyGroup>
+          <MakePriArgs>versioned</MakePriArgs>
+          <MakePriArgs Condition="Exists('$(AppPriProjectRoot)')">$(MakePriArgs) /pr "$(AppPriProjectRoot.TrimEnd('\'))"</MakePriArgs>
+          <MakePriArgs Condition="!Exists('$(AppPriProjectRoot)')">$(MakePriArgs) /pr "$(AbsoluteIntermediatePath)"</MakePriArgs>
+          <MakePriArgs>$(MakePriArgs) /cf "$(PriConfigurationFilePath)" </MakePriArgs>
+          <MakePriArgs>$(MakePriArgs) /of "$(ResourcePriFile)"</MakePriArgs>
+          <MakePriArgs>$(MakePriArgs) /o </MakePriArgs>
+          <MakePriArgs>$(MakePriArgs) /if "@(AppResources)"</MakePriArgs>
+
+     </PropertyGroup>
+      <ItemGroup>
+        <MakePriVersionedCmd Include="$(MakePriPath)">
+          <Arguments>$(MakePriArgs)</Arguments>
+          <DisplayName>makepri versioned</DisplayName>
+        </MakePriVersionedCmd>
+      </ItemGroup>
+     <StartProcessTask Commands="@(MakePriVersionedCmd)" StandardOutputImportance="low" />
+
+     <AddToNativePackageTask InputFile="$(ResourcePriFile)" />
+  </Target>
+
+  <!-- 
+     In retail build we don't merge the framework resource files to the app resources so if retail build we just need to 
+     copy the app resource file to the target folder 
+  -->
+  <Target Name="CopyPackageResourceFileInRetailBuild" Condition="'@(AppResources)' != '' And '$(UseResKeysInsteadOfResStrings)'=='true'">
+     <AddToNativePackageTask InputFile="%(AppResources.Identity)" />
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Run Gatekeeper as first step to verify IL -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="RunGatekeeper" Condition="'$(BuildSharedAssemblies)'!='true'">
+    <ItemGroup>
+      <!-- The ordering of these items is important. In particular, if an app package includes a patched
+           Sytem.Private.* assembly, we want to pick it up from $(FrameworkILPath) instead of $(FrameworkPrivatePath). -->
+      <_GatekeeperLibPath Include="$(FrameworkFacadesPath.TrimEnd('\'))" KeepDuplicates="false"/>
+      <_GatekeeperLibPath Include="$(FrameworkILPath.TrimEnd('\'))" KeepDuplicates="false"/>
+      <_GatekeeperLibPath Include="$(FrameworkPrivatePath.TrimEnd('\'))"/>
+      <_GatekeeperLibPath Include="@(ExternalReferencePaths)"/>
+      <_GatekeeperWinMDPath Include="@(TargetPlatformSdkWinMDFiles)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_GatekeeperArguments>/In:"$(InputPath.TrimEnd('\'))"</_GatekeeperArguments>
+      <_GatekeeperArguments>$(_GatekeeperArguments); /Lib:"@(_GatekeeperLibPath,'"; /Lib:"')"</_GatekeeperArguments>
+      <_GatekeeperArguments Condition="'@(_GatekeeperWinMDPath)' != ''">$(_GatekeeperArguments); /WinMD:"@(_GateKeeperWinMDPath,'"; /WinMD:"')"</_GatekeeperArguments>
+      <_GatekeeperArguments Condition="'$(ProjectNVSSessionSettings)' != ''"> $(_GatekeeperArguments); /VSTelemetrySessionSettings:$(ProjectNVSSessionSettings)</_GatekeeperArguments>
+      <_GatekeeperArguments Condition="'@(RDXmlPaths)' != ''"> $(_GatekeeperArguments); /RdXmlPath:"@(RDXmlPaths,'"; /RdXmlPath:"')"</_GatekeeperArguments>
+      <_GatekeeperArguments Condition="'$(EnableGatekeeperAnalysis)' != 'true'">$(_GatekeeperArguments); /RunOnlyPreDR</_GatekeeperArguments>
+      <_GatekeeperArguments Condition="'$(DisableVSTelCollection)' == 'true'">$(_GatekeeperArguments); /DisableVSTel:true</_GatekeeperArguments>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(IntermediateOutputPath)gkargs.rsp" Lines="$(_GatekeeperArguments)" Overwrite="true" />
+    <ItemGroup>
+      <GatekeeperCommand Include="$(MsBuildThisFileDirectory)tools\Gatekeeper.exe">
+        <Arguments>@"$(IntermediateOutputPath)gkargs.rsp"</Arguments>
+        <DisplayName>Gatekeeper</DisplayName>
+      </GatekeeperCommand>
+    </ItemGroup>
+    <StartProcessTask Commands="@(GatekeeperCommand)" StandardOutputImportance="low" />
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- IL to IL transforms. -->
+  <!-- ####################################################################################################################### -->
+  <PropertyGroup>
+    <ILTransformInputs>@(IntermediatePreMergeILTransformedExeTarget);@(IntermediatePreMergeILTransformedExeSymbols);@(ReducerInputFiles)</ILTransformInputs>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IntermediateMetadataFile>$(ILTransformedIntermediatePath)$(AssemblyName).metadata</IntermediateMetadataFile>
+    <ILMergeInfoFilename>$(ILTransformedIntermediatePath)$(AssemblyName).csv</ILMergeInfoFilename>
+    <TocFileName>$(IntermediateOutputPath)toc.ildll</TocFileName>
+    <ILTocFileName>iltransformtoc.ildll</ILTocFileName>
+    <ResourceCompile>true</ResourceCompile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ResFile Include="$(ILTransformedIntermediatePath)$(AssemblyName).res" />
+  </ItemGroup>
+  <ItemGroup>
+    <TargetPlatformSdkWinMDFiles Include="$(TargetPlatformSdkMetadataLocation)\*.winmd" />
+  </ItemGroup>
+  <PropertyGroup>
+    <RunILTransformsDependsOn>
+      GenerateFakeExe;
+      InjectCoreLibTypeForwards;
+      InjectWindowsRuntimeTypeForwards;
+      PreResolveTransforms;
+      InitInputResourceName;
+      ResolveInitialReferences;
+    </RunILTransformsDependsOn>
+  </PropertyGroup>
+
+  <!-- Shared interop is output a) during shared assembly build, b) during non-shared multifile build -->
+  <PropertyGroup Condition="'$(McgMultiFile)' == 'true' and ('$(BuildSharedAssemblies)' == 'true' or '$(UseSharedAssemblies)' != 'true')">
+    <OutputSharedInteropAssemblyName Condition="'$(OutputSharedInteropAssemblyName)'==''">$(SharedInteropAssemblyNameForNonSharedBuilds)</OutputSharedInteropAssemblyName>
+    <OutputSharedInteropAssemblyName Condition="'$(BuildSharedAssemblies)' == 'true'">System.Private.$(OutSharedLibraryName).Interop.Generated</OutputSharedInteropAssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AppInteropAssemblyName Condition="'$(AppInteropAssemblyName)'==''">$(AssemblyName).McgInterop</AppInteropAssemblyName>
+    <McgCompileOutputDirectory Condition="'$(McgCompileOutputDirectory)'==''">$(IntermediateOutputPath)</McgCompileOutputDirectory>
+    <DispatchProxyAssemblyName Condition="'$(DispatchProxyAssemblyName)'==''">$(AssemblyName).ITFProxy</DispatchProxyAssemblyName>
+    <!-- True when Universal Shared Generics are fully enabled -->
+    <UsgEnabled>false</UsgEnabled>
+    <UsgEnabled Condition="'$(SharedGenericsMode)' == 'StandardUniversalGenericsHeuristics'">true</UsgEnabled>
+    <UsgEnabled Condition="'$(SharedGenericsMode)' == 'GenerateAllUniversalGenerics'">true</UsgEnabled>
+
+    <!-- In single-file mode, GVM tables always resides in the one mutable assembly -->
+    <!-- that is internally called 'System.Private.CoreLib' although its IL code resides in (app-name).ilexe -->
+    <GvmAssemblyName>$(CoreAssemblyName)</GvmAssemblyName>
+    <GvmAssemblyName Condition="'$(MultiFile)' == 'true'">$(AppInteropAssemblyName)</GvmAssemblyName>
+    <GvmAssemblyName Condition="'$(BuildSharedAssemblies)' == 'true' and '$(UsgEnabled)' != 'true'">$(OutputSharedInteropAssemblyName)</GvmAssemblyName>
+  </PropertyGroup>
+
+  <!-- Project-wide NUTC / RhBind parameters -->
+  <PropertyGroup>
+    <CommonNUTCArguments>/ignoreAccessChecks</CommonNUTCArguments>
+    <CommonNUTCArguments>$(CommonNUTCArguments); /metadataFile "$(IntermediateMetadataFile)"</CommonNUTCArguments>
+    <CommonNUTCArguments>$(CommonNUTCArguments); /gvmAssemblyName "$(GvmAssemblyName)"</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(Optimize)'=='true'">$(CommonNUTCArguments); /o</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(ILC_SHARED_GENERICS_DISABLED)'=='0' OR '$(ILC_SHARED_GENERICS_DISABLED)'==''">$(CommonNUTCArguments); /sharedGenerics</CommonNUTCArguments>
+    <CommonNUTCArguments>$(CommonNUTCArguments); /ilmergeinfo "$(ILMergeInfoFilename)"</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(NutcThreadCount)'!=''">$(CommonNUTCArguments); /d2threads$(NutcThreadCount); /d2cgsummary</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(BuildSharedAssemblies)' == 'true'">$(CommonNUTCArguments); /buildSharedAssemblies</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(InternalFeatureSwitch_ExpandedILToc)' == 'true'">$(CommonNUTCArguments); /buildExpandedTocFiles</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(MultiFile)' == 'true'">$(CommonNUTCArguments); /multiFile</CommonNUTCArguments>      
+    <CommonNUTCArguments Condition="'$(Pgu)'=='true'"> $(CommonNUTCArguments) /w full /o "/d2pgu$(PgdPath)"</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(ExtraNutcArguments)'!=''"> $(CommonNUTCArguments) $(ExtraNutcArguments)</CommonNUTCArguments>
+    <CommonNUTCArguments>$(CommonNUTCArguments); /sharedGenericsMode $(SharedGenericsMode)</CommonNUTCArguments>
+    <CommonNUTCArguments Condition="'$(ShouldRunInAppx)'=='false' and '$(EnableWinRT)'=='true'">$(CommonNUTCArguments) /appxModelOverride</CommonNUTCArguments>
+      
+    <CommonRhBindArguments>/osver:6.2; /appcontainer; /runtime:mrt100_app; /eh:clr; /pdb; "/nativelink:$(VMathNativeLibPath)"</CommonRhBindArguments>
+    <!-- Pass /customImports to allow more than 65,536 exports -->
+    <CommonRhBindArguments Condition="'$(MultiFile)' == 'true'">$(CommonRhBindArguments); /customImports</CommonRhBindArguments>
+    <CommonRhBindArguments Condition="'$(DeveloperExperienceMode)'!='true'">$(CommonRhBindArguments); /methodBodyFolding</CommonRhBindArguments>
+    <CommonRhBindArguments Condition="'$(ShowPerfInfo)'=='true'">$(CommonRhBindArguments); /verbose</CommonRhBindArguments>
+    <CommonRhBindArguments Condition="'$(InternalFeatureSwitch_R2R)' == 'true'">$(CommonRhBindArguments); /r2rOutput</CommonRhBindArguments>
+    <CommonRhBindArguments Condition="'$(ExtraRhBindArguments)'!=''"> $(CommonRhBindArguments) $(ExtraRhBindArguments)</CommonRhBindArguments>
+  </PropertyGroup>
+
+  <Target Name="RunILTransforms"
+    Inputs="$(ILTransformInputs)"
+    Outputs="@(IntermediateILTransformedTarget);@(IntermediateILTransformedSymbols);$(IntermediateMetadataFile)"
+    DependsOnTargets="$(RunILTransformsDependsOn)"
+  >
+
+    <IlcMessageTask Importance="High" ResourceName="Message_RunningILTransforms" />
+    <!-- Ensure we have no conflicts in simple names that would crash the IL transforms -->
+    <PropertyGroup>
+      <FrameworkLibPaths>$(FrameworkFacadesPath);$(FrameworkILPath)</FrameworkLibPaths>
+    </PropertyGroup>
+    <ItemGroup>
+      <ValidateSimpleNamesInputs Include="@(InputILTarget);@(ManagedWinMDs);@(ManagedDlls);" />
+    </ItemGroup>
+    <ValidateSimpleNamesTask
+      InputAssemblies="@(ValidateSimpleNamesInputs)"
+      LibPaths="$(FrameworkLibPaths)" />
+    
+    <MakeDir Directories="$(ILTransformedIntermediatePath)" />
+    <MakeDir Condition="'$(BuildSharedAssemblies)' == 'true'" Directories="$(ILTocIntermediatePath)" />
+    <MakeDir Condition="'$(BuildSharedAssemblies)' == 'true'" Directories="$(AnalysisIltocIntermediatePath)" />
+    
+    <!-- ####################################################################################################################### -->
+    <!-- Set up arguments to CSC                                                                                                 -->
+    <!-- ####################################################################################################################### -->
+    <PropertyGroup>
+      <PlatformTarget Condition="'$(TargetBuildArchitecture)'=='amd64'">x64</PlatformTarget>
+      <PlatformTarget Condition="'$(TargetBuildArchitecture)'=='arm'">arm</PlatformTarget>
+      <PlatformTarget Condition="'$(TargetBuildArchitecture)'=='x86'">x86</PlatformTarget>
+    </PropertyGroup>
+    <IlcErrorTask Condition="'$(PlatformTarget)'==''" ResourceName="Error_UnsupportedArchitecture" Parameters="$(TargetBuildArchitecture)" />
+
+    <!-- Setup McgSourceReferences -->
+    <ItemGroup>
+      <!-- Order is important: Use the installed VS reference assemblies in preference to the ILC-bundled ones.
+           Also, if the app package includes a System.Private.* assembly, use that one in preference to the
+           ILC-bundled one. -->
+      <McgRefLibPaths Include="$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)" />
+      <McgRefLibPaths Include="$(FrameworkILPath)" />
+      <McgRefLibPaths Include="$(FrameworkFacadesPath)" />
+      <McgRefLibPaths Include="$(FrameworkPrivatePath)" />
+    </ItemGroup>
+
+    <!-- Common MCG references used regardless of whether framework is app-local or not -->
+    <ItemGroup>
+
+      <McgSourceReferenceNames Include="System.Private.Corelib" />
+      <McgSourceReferenceNames Include="System.Private.Corelib.InteropServices" />
+      <McgSourceReferenceNames Include="System.Private.Interop" />
+      <McgSourceReferenceNames Include="System.Private.Uri" />
+      <McgSourceReferenceNames Include="System.Private.CompilerServices.ICastable" />
+      <McgSourceReferenceNames Include="System.Private.Reflection" />
+
+      <!-- WCF assemblies -->
+      <McgSourceReferenceNames Include="System.Private.DispatchProxy" />
+      <McgSourceReferenceNames Include="System.Reflection.DispatchProxy" />
+      <McgSourceReferenceNames Include="System.Reflection" />
+
+      <!-- Dependencies -->
+      <McgSourceReferenceNames Include="System.Runtime" />
+      <McgSourceReferenceNames Include="System.Runtime.InteropServices" />
+      <McgSourceReferenceNames Condition="'$(EnableWinRT)'=='true'" Include="System.Runtime.InteropServices.WindowsRuntime" />
+      <McgSourceReferenceNames Include="System.Numerics.Vectors" />
+      
+      <!-- For Interlocked class -->
+      <McgSourceReferenceNames Include="System.Threading" />
+
+      <!-- For Debugger class -->
+      <McgSourceReferenceNames Include="System.Diagnostics.Debug" />
+
+    </ItemGroup>
+
+    <!-- These are the dependencies on shared DLLs, which becomes important in MultiFile with UseSharedAssemblies -->
+    <ItemGroup>
+      <McgSourceReferenceSharedNames Include="System.Runtime.Extensions" />
+      <McgSourceReferenceSharedNames Include="System.Collections" />
+      <McgSourceReferenceSharedNames Include="System.ObjectModel" />
+      <McgSourceReferenceNames Condition="'$(BuildSharedAssemblies)' != 'true'" Include="System.Runtime.WindowsRuntime" />
+      <McgSourceReferenceNames Condition="'$(BuildSharedAssemblies)' != 'true'" Include="System.Runtime.WindowsRuntime.UI.Xaml" />
+      <!-- For ConditionalWeakTable -->
+      <McgSourceReferenceNames Include="System.Dynamic.Runtime" />
+
+      <!-- For FixupRuntimeTypeHandle -->
+      <McgSourceReferenceNames Include="System.Private.CoreLib.Augments" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <McgSourceContractsReferenceList>@(McgSourceReferenceNames->'%(Identity).dll');@(McgSourceReferenceSharedNames->'%(Identity).dll')</McgSourceContractsReferenceList>
+      <McgSourceFacadeReferenceList>@(McgSourceReferenceNames->'%(Identity).dll');@(McgSourceReferenceSharedNames->'%(Identity).$(ReferenceILExt)')</McgSourceFacadeReferenceList>
+    </PropertyGroup>
+
+    <!-- resolve those contracts in contract directory -->    
+    <ResolveFilePathTask InputFileNames="$(McgSourceContractsReferenceList)" DirectorySearchList="@(McgRefLibPaths)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="McgSourceContractsReferences" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedMcgSourceContractsReferences" />
+    </ResolveFilePathTask>
+
+    <ItemGroup Condition="'@(UnresolvedMcgSourceContractsReferences)'!=''">
+      <UnresolvedMcgSourceContractsReferencesErrorParameters Include="@(UnresolvedMcgSourceContractsReferences, ';')" />
+      <UnresolvedMcgSourceContractsReferencesErrorParameters Include="@(McgRefLibPaths, ';')" />  
+    </ItemGroup>
+    <IlcErrorTask Condition="'@(UnresolvedMcgSourceContractsReferencesErrorParameters)'!=''" ResourceName="Error_UnresolvedMcgSourceContractsReferences" Parameters="@(UnresolvedMcgSourceContractsReferencesErrorParameters)" />    
+    <!-- Resolve those contracts in facades directory and IL directory for IL transform to consume -->
+
+    <ResolveFilePathTask InputFileNames="$(McgSourceFacadeReferenceList)" DirectorySearchList="@(ILSearchPath);$(FrameworkFacadesPath)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="McgSourceFacadeReferences" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedMcgSourceFacadeReferences" />
+    </ResolveFilePathTask>
+
+    <ItemGroup Condition="'$(UseSharedAssemblies)' == 'true' and '$(McgMultiFile)' == 'true'">
+      <McgSourceContractsReferences Include="@(InputSharedInteropAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyAnalysisILTocFolderName)\%(Identity).iltoc')" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <!--Ignore System.Numerics.Vectors since it's not part of framework but a nuget package-->
+      <McgSourceFacadeReferencesIgnore Include="System.Numerics.Vectors.dll"/>
+    </ItemGroup>
+    
+    <ItemGroup>
+      <MissingMcgSourceFacadeReferences Include="@(UnresolvedMcgSourceFacadeReferences)" Exclude="@(McgSourceFacadeReferencesIgnore)" />
+    </ItemGroup>
+    
+    <ItemGroup Condition="'@(MissingMcgSourceFacadeReferences)'!=''">
+      <UnresolvedMcgSourceFacadeErrorParameters Include="@(MissingMcgSourceFacadeReferences, ';')" />
+      <UnresolvedMcgSourceFacadeErrorParameters Include="@(ILSearchPath, ';')" />
+      <UnresolvedMcgSourceFacadeErrorParameters Include="$(FrameworkFacadesPath)" />
+    </ItemGroup>
+    <IlcErrorTask Condition="'@(UnresolvedMcgSourceFacadeErrorParameters)'!=''" ResourceName="Error_UnresolvedMcgSourceFacadeReferences" Parameters="@(UnresolvedMcgSourceFacadeErrorParameters)" />    
+
+    <!-- ####################################################################################################################### -->
+    <!-- ILMerge task - merge dependency closure and MCG interop assembly into the main assembly                                 -->
+    <!-- ####################################################################################################################### -->
+    <ItemGroup>
+      <FinalAssemblyClosureRootNames Include="System.Diagnostics.Tools.dll" />
+      <FinalAssemblyClosureRootNames Condition="'$(EnableWinRT)'=='true'" Include="System.Private.DeveloperExperience.AppX.dll" />
+      <FinalAssemblyClosureRootNames Condition="'$(AllowConsoleSupport)' == 'true' And '$(ShouldRunInAppx)' != 'true'" Include="System.Private.DeveloperExperience.Console.dll" />
+      <FinalAssemblyClosureRootNames Condition="'$(EnableWinRT)'=='true'" Include="System.Private.WinRTInterop.CoreLib.dll" />
+      <FinalAssemblyClosureRootNames Include="System.Private.Reflection.Execution.dll" />
+
+      <!-- We can't run the AssemblyClosure task on the interop or serialization assemblies, so pull these in since there may be a dependency on them.  -->
+      <FinalAssemblyClosureRootNames Include="System.ObjectModel.dll" />
+      <FinalAssemblyClosureRootNames Include="System.Text.Encoding.CodePages.dll" />
+      <FinalAssemblyClosureRootNames Include="System.AppContext.dll" />
+
+      <!-- During shared library build we add the constituent assemblies to the closure -->
+      <!-- We don't root shared interop module being output in this build because -->
+      <!-- reduced copy contains special handling for it. -->
+      <FinalAssemblyClosureRootNames Include="%(DefinitionOutputSharedAssemblyNames.Identity).dll"
+        Condition="'$(BuildSharedAssemblies)' == 'true' and '%(DefinitionOutputSharedAssemblyNames.Identity)' != '$(FixedCoreAssemblyName)' and '%(DefinitionOutputSharedAssemblyNames.Identity)' != '$(SystemRuntimeImplementationAssemblyName)'" />
+    </ItemGroup>
+
+    <!-- CompatQuirks is only needed for console apps and when not building shareable assemblies -->
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' != 'true' and '$(ShouldRunInAppx)' != 'true'">
+      <FinalAssemblyClosureRootNames Include="System.Private.CompatQuirks.dll" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <FinalAssemblyClosureRootSearchPaths Include="$(FrameworkILPath)" />
+      <FinalAssemblyClosureRootSearchPaths Include="$(FrameworkPrivatePath)" />
+    </ItemGroup>
+
+    <ResolveFilePathTask InputFileNames="@(FinalAssemblyClosureRootNames)" DirectorySearchList="@(FinalAssemblyClosureRootSearchPaths)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="FinalAssemblyClosureRoots" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedFinalAssemblyClosureRoots" />
+    </ResolveFilePathTask>
+
+    <IlcErrorTask
+        Condition="'@(UnresolvedFinalAssemblyClosureRoots)' != ''"
+        ResourceName="Error_UnresolvedFinalClosureRoots"
+        Parameters="@(UnresolvedFinalAssemblyClosureRoots, ', ');@(FinalAssemblyClosureRootSearchPaths, ', ')" />
+
+    <ItemGroup>
+      <!-- The PreMergeILTransform directory must come before the ILSearch path -->
+      <MergeAssemblyPaths Include="@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyAnalysisILTocFolderName)')"
+          Condition="'$(UseSharedAssemblies)' == 'true'" />
+      <MergeAssemblyPaths Include="$(IntermediatePreMergeILTransformedPath)" />
+      <MergeAssemblyPaths Include="@(ILSearchPath);$(FrameworkFacadesPath);$(TargetPlatformSdkMetadataLocation);@(ExternalReferencePaths)" />
+      <FinalAssemblyClosureRoots Include="@(IntermediatePreMergeILTransformedExeTarget)" />
+      <FinalAssemblyClosureRoots Include="@(ManagedWinMDs)" />
+      <FinalAssemblyClosureRoots Include="@(McgSourceFacadeReferences)" />
+      <FinalAssemblyClosureRoots Include="$(FrameworkFacadesPath)mscorlib.dll" />
+    </ItemGroup>
+
+    <!-- Managed Dlls may either be in the original app directory or have gone through
+    PreMerge transforms, so do a resolution to find out which one happened -->
+    <ResolveFilePathTask InputFileNames="@(ManagedDlls->'%(filename)%(extension)')" DirectorySearchList="@(MergeAssemblyPaths)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="ResolvedManagedDllFilePaths" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedManagedDllFiles" />
+    </ResolveFilePathTask>
+      
+    <ItemGroup Condition="'@(UnresolvedManagedDllFiles)'!=''">
+      <UnresolvedManagedDllFilesErrorParameters Include="@(UnresolvedManagedDllFiles, ';')" />
+      <UnresolvedManagedDllFilesErrorParameters Include="@(MergeAssemblyPaths, ';')" />
+    </ItemGroup>
+    <IlcErrorTask Condition="'@(UnresolvedManagedDllFilesErrorParameters)'!=''" ResourceName="Error_UnresolvedManagedDllFiles" Parameters="@(UnresolvedManagedDllFilesErrorParameters)" />
+
+    <ItemGroup>
+      <FinalAssemblyClosureRoots Include="@(ResolvedManagedDllFilePaths)" />
+    </ItemGroup>
+
+    <Message Text="Running AssemblyClosureTask in RunILTransforms" />
+    <AssemblyClosureTask
+      RootAssemblies="@(FinalAssemblyClosureRoots)"
+      FrameworkAssemblies="@(PreferredFrameworkAssemblies)"
+      LibPaths="@(MergeAssemblyPaths)"
+      IgnoreFacades="false"
+      IgnoreWinRtReferences="true">
+      <Output TaskParameter="DependencyClosure" ItemName="FinalAppAssemblies" />
+    </AssemblyClosureTask>
+
+    <!-- Resolve System.Private.CoreLib.dll only when not using shared assemblies, otherwise it has well-known location -->
+    <ResolveFilePathTask
+        Condition="'$(UseSharedAssemblies)' != 'true'"
+        InputFileNames="$(CoreAssemblyName).dll" DirectorySearchList="@(ILSearchPath)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="ResolvedCoreAssemblyPath" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedCoreAssemblyPath" />
+    </ResolveFilePathTask>
+
+    <ItemGroup Condition="'$(UseSharedAssemblies)' == 'true'">
+      <!-- CoreAssembly "System.Private.CoreLib" resides in the top folder -->
+      <ResolvedCoreAssemblyPath Include="$(InSharedAssemblyPath)\$(SharedAssemblyAnalysisILTocFolderName)\$(CoreAssemblyName).iltoc" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'@(UnresolvedCoreAssemblyPath)'!=''">
+      <UnresolvedCoreAssemblyErrorParameters Include="$(CoreAssemblyName).dll" />
+      <UnresolvedCoreAssemblyErrorParameters Include="@(ILSearchPath)" />
+    </ItemGroup>
+    <IlcErrorTask Condition="'@(UnresolvedCoreAssemblyErrorParameters)'!=''" ResourceName="Error_UnresolvedCoreAssembly" Parameters="@(UnresolvedCoreAssemblyErrorParameters)" />
+    
+    <ItemGroup>
+      <AssembliesToMerge Include="@(FinalAppAssemblies)" />
+      <AssembliesToMerge Include="@(FinalAssemblyClosureRoots)" />
+      <AssembliesToMerge Include="@(ManagedWinMDs)" />
+    </ItemGroup>
+
+    <!-- Combine and remove duplicates into one list of assemblies to be merged, this is simply for easier logging -->
+    <RemoveDuplicates Inputs="@(ResolvedCoreAssemblyPath);@(IntermediatePreMergeILTransformedExeTarget);@(AssembliesToMerge)">
+      <Output TaskParameter="Filtered" ItemName="FinalILMergeList" />
+    </RemoveDuplicates>
+
+    <!-- ####################################################################################################################### -->
+    <!-- Now that we have the final merge list, add clrcompression.dll to the final package if Nuget based assemblies are not being used. -->
+    <!-- This means that ClrCompression should be handled here only in internal testing mode for the core .NET Native team. -->
+    <!-- As today we're not exposing this flag to IlcInternals.targets, the condition is keyed off AllowAppLocalMrt which is also -->
+    <!-- only used in internal testing. -->
+    <!-- ####################################################################################################################### -->
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' != 'true' and '$(AllowAppLocalMrt)' == 'true' and !Exists('$(InputPath)\$(ClrCompressionFileName)')">
+      <NeedsClrCompression Include="@(AssembliesToMerge)" Condition="'%(FileName)'=='System.IO.Compression'" />
+    </ItemGroup>
+    <AddToNativePackageTask InputFile = "$(ClrCompressionPath)" Condition = "'@(NeedsClrCompression)' != ''" />
+
+    <!-- ####################################################################################################################### -->
+    <!-- Set up arguments to SG                                                                                                  -->
+    <!-- ####################################################################################################################### -->
+    <PropertyGroup>
+      <SerializationAssemblyGeneratorArgs>/out:"$(SGGeneratedPath)\\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /int:"$(IntermediateOutputPath)\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs Condition="'$(SerializationAssemblyGeneratorInput)'!=''">$(SerializationAssemblyGeneratorArgs); "@$(SerializationAssemblyGeneratorInput)"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ref:"$(IntermediatePreMergeILTransformedPath)\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ref:"$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs Condition="'$(InputPath)'!=''">$(SerializationAssemblyGeneratorArgs); /ref:"$(InputPath)\\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ref:"$(FrameworkILPath)\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ref:"$(FrameworkFacadesPath)\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ref:"$(FrameworkPrivatePath)\"</SerializationAssemblyGeneratorArgs>
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ref:"$(TargetPlatformSdkMetadataLocation)\\"</SerializationAssemblyGeneratorArgs>
+
+      <SerializationAssemblyGeneratorArgs>$(SerializationAssemblyGeneratorArgs); /ca:$(FixedCoreAssemblyName)</SerializationAssemblyGeneratorArgs>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(SGGeneratedPath)" />
+
+    <WriteLinesToFile File="$(IntermediateOutputPath)sgargs.rsp" Lines="$(SerializationAssemblyGeneratorArgs)" Overwrite="true" />
+    <ItemGroup>
+      <SGAssembliesToMerge Include="$(SRSGeneratedPath)"/>
+      <SGAssembliesToMerge Include="$(SRSGeneratedIntermediatePath)" />
+      <SGAssembliesToMerge Include="$(SXXSGeneratedPath)" />
+    </ItemGroup>
+
+    <!-- define the intermediate paths used with resource extraction -->
+    <PropertyGroup>
+      <IntermediateResWPath>$(IntermediateOutputPath)ResW\</IntermediateResWPath>
+    </PropertyGroup>
+    
+    <!-- List of all binaries with managed headers. Reducer needs that list to compute reflection directives in the *Application* case -->
+    <ItemGroup>
+      <PackageBinariesWithManagedHeaders Include="@(InputILTarget)" />
+      <PackageBinariesWithManagedHeaders Include="@(ManagedDlls)" />
+      <PackageBinariesWithManagedHeaders Include="@(ManagedWinMDs)" />
+      <PackageBinariesWithManagedHeaders Include="@(NativeWinMDs)" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(IntermediateResWPath)"/>
+
+    <!-- ####################################################################################################################### -->
+    <!-- Post-resolve IL transforms - Performs assorted feature-specific transforms. -->
+    <!--    These transforms run *after* dependency implementation assemblies have been built and the original contract references -->
+    <!--    replaced with references to implementations. (That is, System.Object is in "System.Private.CoreLib", not "System.Runtime".) -->
+    <!-- ####################################################################################################################### -->
+    <ItemGroup>
+      <ILTransform Include="Analysis">
+        <InputAssembly>@(IntermediatePreMergeILTransformedExeTarget)</InputAssembly>
+        <OutputSharedInteropAssemblyName Condition="'$(McgMultiFile)' == 'true'">$(OutputSharedInteropAssemblyName)</OutputSharedInteropAssemblyName>
+        <InputSharedInteropAssemblyNames Condition="'$(UseSharedAssemblies)' == 'true'">@(InputSharedInteropAssemblyNames)</InputSharedInteropAssemblyNames>
+        <AppInteropAssemblyName>$(AppInteropAssemblyName)</AppInteropAssemblyName>
+        <AppDispatchProxyAssemblyName>$(DispatchProxyAssemblyName)</AppDispatchProxyAssemblyName>
+        <InputPath>$(InputPath)</InputPath>
+        <RefAssemblyNames>@(CompleteInitialResolvedFilePaths)</RefAssemblyNames>
+        <SerializationTypesPath>$(ComputedSerializationGeneratorInput)</SerializationTypesPath>
+        <RDXmlPaths>@(RDXmlPaths)</RDXmlPaths>
+        <ReflectionLog>$(ILTransformedIntermediatePath)$(AssemblyName).reflectionlog.csv</ReflectionLog>
+        <MultiFile>$(MultiFile)</MultiFile>
+        <BuildSharedAssemblies>$(BuildSharedAssemblies)</BuildSharedAssemblies>
+        <UseSharedAssemblies>$(UseSharedAssemblies)</UseSharedAssemblies>
+        <ShouldRunInAppx>$(ShouldRunInAppx)</ShouldRunInAppx>
+        <ExplicitlyRequiresNonStandardEncodings>$(ExplicitlyRequiresNonStandardEncodings)</ExplicitlyRequiresNonStandardEncodings>
+        <!-- For legacy App Store apps, infer whether or not non-standard encodings are required for compat -->
+        <InferNonStandardEncodingRequirement Condition="'$(AutoDetectNonStandardEncoding)' == 'true' and '$(ShouldRunInAppX)' == 'true'">true</InferNonStandardEncodingRequirement>
+        <ILTransformTableOfContentsFiles Condition="'$(UseSharedAssemblies)' == 'true'">@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyFolderPerBuildMode)\%(InputSharedLibraryName).$(ILTocFileName)')</ILTransformTableOfContentsFiles>
+        <PackageBinariesWithManagedHeaders>@(PackageBinariesWithManagedHeaders)</PackageBinariesWithManagedHeaders>
+        <FrameworkImplementationAssemblies>@(FrameworkImplementationAssemblies)</FrameworkImplementationAssemblies>
+        <OutputSharedAssemblyNames Condition="'$(BuildSharedAssemblies)' == 'true'">@(DefinitionOutputSharedAssemblyNames)</OutputSharedAssemblyNames>
+        <InputSharedAssemblyNames Condition="'$(UseSharedAssemblies)' == 'true'">@(InputSharedAssemblyNames)</InputSharedAssemblyNames>
+        <InteropAnalysisResultsFile Condition="'$(InteropAnalysisResultsFile)' != ''">$(McgOutputDirectory)\$(InteropAnalysisResultsFile)</InteropAnalysisResultsFile>
+        <CompleteWinRTInterop>$(CompleteWinRTInterop)</CompleteWinRTInterop>
+        <DiagnosticLogDirectory Condition="'$(DumpIlcLogs)' == 'true'">$(ILTransformedIntermediatePath)</DiagnosticLogDirectory>
+        <EnableWinRT>$(EnableWinRT)</EnableWinRT>
+        <ShortcutGenerics>$(ShortcutGenerics)</ShortcutGenerics>
+      </ILTransform>
+      <ILTransform Include="Mcg">
+        <InputAssembly>@(IntermediatePreMergeILTransformedExeTarget)</InputAssembly>
+        <AppInteropAssemblyName>$(AppInteropAssemblyName)</AppInteropAssemblyName>
+        <OutputDirectory>$(McgOutputDirectory)</OutputDirectory>
+        <InputPath>$(InputPath)</InputPath>
+        <InteropClass>$(McgWinRTInteropClassName)</InteropClass>
+        <RefAssemblyNames>@(CompleteInitialResolvedFilePaths)</RefAssemblyNames>
+        <ImportLibNameList>$(McgWinRTInteropImportLibs)</ImportLibNameList>
+        <ImportLibPathList>@(_McgWinRTInteropLibPath)</ImportLibPathList>
+        <WindowsSDKLibPath>$(WindowsSDKLibPath)</WindowsSDKLibPath>
+        <TargetArch>$(McgWinRTInteropArch)</TargetArch>
+        <BuildSharedAssemblies>$(BuildSharedAssemblies)</BuildSharedAssemblies>
+        <UseSharedAssemblies>$(UseSharedAssemblies)</UseSharedAssemblies>
+        <UseDefaultPInvoke>$(UseDefaultPInvoke)</UseDefaultPInvoke>
+        <SharedAssemblyNames>@(InputSharedAssemblyNames)</SharedAssemblyNames>
+        <InteropAnalysisResultsFile Condition="'$(InteropAnalysisResultsFile)' != ''">$(McgOutputDirectory)\$(InteropAnalysisResultsFile)</InteropAnalysisResultsFile>
+        <CompleteWinRTInterop>$(CompleteWinRTInterop)</CompleteWinRTInterop>
+        <EnableWinRT>$(EnableWinRT)</EnableWinRT>
+      </ILTransform>
+      <ILTransform Include="GenerateCodeAndCompile">
+        <CscToolPath>$(CscPath)</CscToolPath>
+        <DebugType>$(DebugType)</DebugType>
+        <DefineConstants>$(DefineConstants);MCG_PRE_BUILD</DefineConstants>
+        <!-- 0436 - need to disable beacuse of the duplicate public interop type in interop code -->   
+        <!-- 0618 - need to disable because of using deprecated type ICustomQueryInterface in interop code -->
+        <!-- 1668 - need to disable warnings emitted when lib paths cannot be resolved. C++ builds add an environment
+                    variable (named LIB) that reference paths that may be invalid depending on which C++ SDKs are
+                    installed. 
+             1685 - disabling because System.Runtime.InteropServices.Marshal is defined in both
+                    System.Runtime.Extensions and System.Private.Interop.
+             1701 - disabled becuse System.Private.Interop has a reference to System.Reflection of a lower version than
+                    the one we are passing to the toolchain. This error is specific to running N toolchain with k libraries
+             1702 - disabled becuse System.Private.Interop has a reference to System.Reflection of a lower version than
+                    the one we are passing to the toolchain. This error is specific to running N toolchain with k libraries
+             -->
+        <DisabledWarnings>0436;0618;1668;1685;1701;1702</DisabledWarnings>
+        <EmitDebugInformation>$(DebugSymbols)</EmitDebugInformation>
+        <NoCompilerStandardLib>$(NoCompilerStandardLib)</NoCompilerStandardLib>
+        <Optimize>$(Optimize)</Optimize>
+        <SourceFileDirectory>$(McgOutputDirectory)</SourceFileDirectory>
+        <OutputDirectory>$(McgCompileOutputDirectory)</OutputDirectory>
+        <Platform>$(PlatformTarget)</Platform>
+        <References>@(McgSourceContractsReferences)</References>
+        <TreatWarningsAsErrors>$(TreatWarningsAsErrors)</TreatWarningsAsErrors>
+        <WarningLevel>$(WarningLevel)</WarningLevel>
+        <WarningsAsErrors>$(WarningsAsErrors)</WarningsAsErrors>
+        <WarningsNotAsErrors>$(WarningsNotAsErrors)</WarningsNotAsErrors>
+        <BuildSharedAssemblies>$(BuildSharedAssemblies)</BuildSharedAssemblies>
+        <UseSharedAssemblies>$(UseSharedAssemblies)</UseSharedAssemblies>
+        <SkipMcgCodeGen>$(HasMcgPatchDlls)</SkipMcgCodeGen>
+        <!-- SerializationAssemblyGenerator runs in parallel with CompileMcgSource-->
+        <SGArgsRSPPath>$(IntermediateOutputPath)sgargs.rsp</SGArgsRSPPath>
+        <SgExePath>$(SgExePath)</SgExePath>
+        <SerializationTypesPath>$(ComputedSerializationGeneratorInput)</SerializationTypesPath>
+        <AssembliesToMerge>@(FinalILMergeList)</AssembliesToMerge>
+      </ILTransform>
+      <ILTransform Include="DumpNativeResources">
+        <InputAssembly>@(IntermediatePreMergeILTransformedExeTarget)</InputAssembly>
+        <OutputResourceFile>@(ResFile)</OutputResourceFile>
+      </ILTransform>
+      <ILTransform Include="ReducedCopyInitialize">
+        <EntrypointAssembly>@(IntermediatePreMergeILTransformedExeTarget)</EntrypointAssembly>
+        <AssembliesToMerge>@(FinalILMergeList)</AssembliesToMerge>
+        <OutputAssembly>@(IntermediateILTransformedTarget)</OutputAssembly>
+        <OptionalSGAssemblies>@(SGAssembliesToMerge)</OptionalSGAssemblies>
+        <WinMDRefFileNames>@(CompleteInitialResolvedFilePaths)</WinMDRefFileNames>
+        <MultiFile>$(MultiFile)</MultiFile>
+        <EnableWinRT>$(EnableWinRT)</EnableWinRT>
+        <McgCompileOutputDirectory>$(McgCompileOutputDirectory)</McgCompileOutputDirectory>
+        <BuildSharedAssemblies>$(BuildSharedAssemblies)</BuildSharedAssemblies>
+        <UseSharedAssemblies>$(UseSharedAssemblies)</UseSharedAssemblies>
+        <ILTocFilePaths Condition="'$(UseSharedAssemblies)' == 'true'">@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyILTocFolderName)')</ILTocFilePaths>
+      </ILTransform>
+      <ILTransform Include="ReducedCopyEmptyTypes" />
+      <ILTransform Include="ReducedCopyPopulateTypes" />
+      <ILTransform Include="ReducedCopyLateMetadata">
+        <EntrypointAssembly>@(IntermediatePreMergeILTransformedExeTarget)</EntrypointAssembly>
+      </ILTransform>
+      <ILTransform Include="ReducedCopyMethodBodies">
+        <FrameworkImplementationAssemblies>@(FrameworkImplementationAssemblies)</FrameworkImplementationAssemblies>
+        <ExtractResources>true</ExtractResources>
+        <IntermediateResourcesPath>$(IntermediateResourcesPath)</IntermediateResourcesPath>
+      </ILTransform>
+      <ILTransform Include="ReducedCopyComplete">
+        <SharedAssembliesILMergeInfoFilePaths Condition="'$(UseSharedAssemblies)' == 'true'">@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyFolderPerBuildMode)\$(SharedAssemblyILMergeInfoFileName)')</SharedAssembliesILMergeInfoFilePaths>
+        <ILMergeInfoFile>$(ILMergeInfoFilename)</ILMergeInfoFile>
+        <OutputSharedAssemblyNames Condition="'$(BuildSharedAssemblies)' == 'true'">@(OutputSharedAssemblyNames)</OutputSharedAssemblyNames>
+      </ILTransform>
+      <ILTransform
+        Condition="'$(BuildSharedAssemblies)' == 'true'"
+        Include="ReducedCopyWriteILTableOfContents">
+        <ILTocFilesPath>$(AnalysisILTocIntermediatePath)</ILTocFilesPath>
+        <ILTableOfContentsFile>$(IntermediateOutputPath)\$(OutSharedLibraryName).$(ILTocFileName)</ILTableOfContentsFile>
+        <OutputSharedAssemblyNames>@(OutputSharedAssemblyNames)</OutputSharedAssemblyNames>
+        <KnownSerializableNonGenericTypes>@(KnownSerializableNonGenericTypes)</KnownSerializableNonGenericTypes>
+        <KnownSerializableGenericTypes>@(KnownSerializableGenericTypes)</KnownSerializableGenericTypes>
+        <DiagnosticLogDirectory Condition="'$(DumpIlcLogs)' == 'true'">$(ILTransformedIntermediatePath)</DiagnosticLogDirectory>
+        <NetNativeToolsVersion>$(NetNativeToolsVersion)</NetNativeToolsVersion>
+      </ILTransform>
+      <ILTransform Include="ReducedCopyCleanup" />
+      <ILTransform Include="DeveloperExperienceModeOnlyCodeRemover" Condition="'$(DeveloperExperienceMode)'!='true'" >
+        <FrameworkImplementationAssemblies>@(FrameworkImplementationAssemblies)</FrameworkImplementationAssemblies>
+      </ILTransform>
+      <ILTransform Include="ComImportDetector" />
+      <ILTransform Include="McgAccessor" Condition="'$(McgWinMDImport)'=='true'" />
+      <!-- McgRedirect needs to run in two passes: First to redirect types in all assemblies and second to redirect methods -->
+      <ILTransform Include="McgRedirect">
+        <RedirectTypes>true</RedirectTypes>
+      </ILTransform>
+      <ILTransform Include="McgRedirect">
+        <RedirectTypes>false</RedirectTypes>
+      </ILTransform>
+      <!-- McgTypeOf transform - Rewrite System.Runtime.InteropServices.TypeOfHelper.TypeOf("typename") to be ldtoken type         -->
+      <!--                     - This is needed because C# enforces type visibility rules on typeof operator and we need to see    -->
+      <!--                     - the internal types for CCW templates                                                              -->
+      <ILTransform Include="McgTypeOf">
+      </ILTransform>
+      <ILTransform Include="ExceptionMiniaturizer" Condition="'$(DeveloperExperienceMode)'!='true'" >
+        <FrameworkImplementationAssemblies>@(FrameworkImplementationAssemblies)</FrameworkImplementationAssemblies>
+      </ILTransform>
+      <ILTransform Include="EventSource" />
+      <ILTransform Include="ValueType" />
+      <ILTransform Include="Attribute" />
+      <ILTransform Include="GetType" >
+      </ILTransform>
+      <ILTransform Include="McgFixups" />
+      <!-- McgFixups must run before Delegate, as McgFixups looks for the classic delegate construction pattern -->
+      <ILTransform Include="ResourceManagerCtor">
+        <UseResourceKeys>$(UseResKeysInsteadOfResStrings)</UseResourceKeys>
+      </ILTransform>      
+      <ILTransform Include="ResourceExtractor" Condition="'$(UseResKeysInsteadOfResStrings)' != 'true'">
+        <FrameworkImplementationAssemblies>@(FrameworkImplementationAssemblies)</FrameworkImplementationAssemblies>
+        <OutputSharedAssemblyNames Condition="'$(BuildSharedAssemblies)' == 'true'">@(OutputSharedAssemblyNames)</OutputSharedAssemblyNames>
+        <ReswPath>$(IntermediateResWPath)</ReswPath>
+      </ILTransform>      
+      <ILTransform Include="TypeofTypeHandle" />
+      <ILTransform Include="DispatchProxyIntrinsics" />
+      <ILTransform Include="StaticInitData">
+          <BuildSharedAssemblies>$(BuildSharedAssemblies)</BuildSharedAssemblies>
+          <TargetArch>$(TargetBuildArchitecture)</TargetArch>
+      </ILTransform>
+      <ILTransform Include="StartupCodeInjector">
+        <DirectInputSharedInteropAssemblyNames>@(DirectInputSharedInteropAssemblyNames)</DirectInputSharedInteropAssemblyNames>
+        <DeveloperExperienceMode Condition="'$(DeveloperExperienceMode)'=='true'">true</DeveloperExperienceMode>
+        <ShouldRunInAppx>$(ShouldRunInAppx)</ShouldRunInAppx>
+        <EnableWinRT>$(EnableWinRT)</EnableWinRT>
+        <ReadyToRunLauncher>$(InternalFeatureSwitch_R2RLauncher)</ReadyToRunLauncher>
+      </ILTransform>
+      <ILTransform Include="InjectAppContextSwitches" >
+        <AppContextSwitches>@(AppContextSwitches)</AppContextSwitches>
+      </ILTransform>
+      <ILTransform Include="ImplementLibraryDynamicInvokeHelpers" />
+      <ILTransform Include="Delegate" >
+        <EnableLinqSupport>true</EnableLinqSupport>
+      </ILTransform>
+      <ILTransform Include="DelegateCtorCall" />
+      <ILTransform Include="LazyGenerics" />
+      <ILTransform Include="AddReflectionBlockedAttributes" />
+      <ILTransform Include="DisableOptimization" />
+      <ILTransform Include="CreateMetadata">
+        <OutputMetadata>$(IntermediateMetadataFile)</OutputMetadata>
+        <MultiFile>$(MultiFile)</MultiFile>
+        <DeveloperExperienceMode Condition="'$(DeveloperExperienceMode)'=='true'">true</DeveloperExperienceMode>
+        <GenerateLog Condition="'$(DumpIlcLogs)' == 'true'">true</GenerateLog>
+        <ReflectableSetLog Condition="'$(DumpIlcLogs)' == 'true'">$(ILTransformedIntermediatePath)$(AssemblyName).CreateMetadataInput.log</ReflectableSetLog>
+      </ILTransform>
+      <ILTransform Include="SaveRVAStatics" />
+      <ILTransform Include="ReflectionInvoke" />
+      <ILTransform Include="ScrubOpenCalls" />
+      <ILTransform Include="ConvertCatchIntoFilter">
+        <OnlyGenericCatchClauses>true</OnlyGenericCatchClauses>
+      </ILTransform>
+      <ILTransform Include="ReflectionMappingInfoEmit" />
+      <ILTransform Include="ForcedTypeInstantiations" Condition="'$(BuildSharedAssemblies)' == 'true'" />
+      <ILTransform Include="ConvertManagedWinMD" />
+      <ILTransform Include="Reducer">
+        <MultiFile>$(MultiFile)</MultiFile>
+        <InputPath>$(InputPath)</InputPath>
+        <RDXmlPaths>@(RDXmlPaths)</RDXmlPaths>
+        <ReflectionLog>$(ILTransformedIntermediatePath)$(AssemblyName).reflectionlog.csv</ReflectionLog>
+        <BuildSharedAssemblies>$(BuildSharedAssemblies)</BuildSharedAssemblies>
+        <UseSharedAssemblies>$(UseSharedAssemblies)</UseSharedAssemblies>
+        <ShortcutGenerics>$(ShortcutGenerics)</ShortcutGenerics>
+      </ILTransform>
+      <ILTransform Include="WriteAssemblies">
+        <DontSaveUnlessChangesMade>false</DontSaveUnlessChangesMade>
+        <UseILOutputPrefix>true</UseILOutputPrefix>
+        <OutputAssembly>@(IntermediateILTransformedTarget)</OutputAssembly>
+      </ILTransform>
+      <ILTransform
+        Condition="'$(BuildSharedAssemblies)' == 'true'"
+        Include="WriteILTableOfContents">
+        <ILTocFilesPath>$(ILTocIntermediatePath)</ILTocFilesPath>
+        <OutputSharedAssemblyNames>@(OutputSharedAssemblyNames)</OutputSharedAssemblyNames>
+        <KnownSerializableNonGenericTypes>@(KnownSerializableNonGenericTypes)</KnownSerializableNonGenericTypes>
+        <KnownSerializableGenericTypes>@(KnownSerializableGenericTypes)</KnownSerializableGenericTypes>
+        <DiagnosticLogDirectory Condition="'$(DumpIlcLogs)' == 'true'">$(ILTransformedIntermediatePath)</DiagnosticLogDirectory>
+        <NetNativeToolsVersion>$(NetNativeToolsVersion)</NetNativeToolsVersion>
+      </ILTransform>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ILTransformLibPaths Include="@(ILSearchPath)" />
+      <ILTransformLibPaths Include="$(FrameworkFacadesPath)" />
+    </ItemGroup>
+
+    <IlcWarningTask Condition="'$(BuildSharedAssemblies)' != 'true' and '@(ReducerInputFiles)' == ''" ResourceName="Warning_NoRuntimeDirectives" />
+    
+    <ILTransformTask
+      InputAssembly="@(ResolvedCoreAssemblyPath)"
+      OutputAssembly="@(IntermediateILTransformedTarget)"
+      ILTransforms="@(ILTransform)"
+      CoreAssemblyName="$(CoreAssemblyName)"
+      LibPaths="@(ILTransformLibPaths)"
+      PlatformWinMDFiles="@(TargetPlatformSdkWinMDFiles)"
+      RunMetadataValidator="$(RunILTransformMetadataValidator)"
+      DeepCopyAssembly="false"
+      WellKnownTypesPath="$(ILToolchainDll)"
+      UseILOutputPrefix="true"
+      SuppressWarnings="$(ILTransformSuppressWarnings)"
+      ExceptionLoggerPtr="$(ExceptionLogger)"
+      SkipWritingTransformedAssembly="true"
+      InternalFeatureSwitches="@(InternalFeatureSwitches)"
+    >
+      <Output TaskParameter="ILTransforms" ItemName="_ILTransformsOut" />
+      <Output TaskParameter="UpgradeableWarnings" ItemName="UpgradeableWarningsOut" />
+    </ILTransformTask>
+
+    <!-- Write the shared assembly list file. -->
+    <WriteLinesToFile
+      Condition="'$(BuildSharedAssemblies)' == 'true'"
+      File="$(OutputSharedAssemblyListPath)"
+      Lines="@(OutputSharedAssemblyNames)"
+      Overwrite="true"/>
+    
+    <PropertyGroup>
+      <!-- After merging the Core assembly becomes the assembly we are compiling -->
+      <CoreAssemblyName>$(AssemblyName)</CoreAssemblyName>
+    </PropertyGroup>
+    
+    <ItemGroup>
+      <FileWrites Include="@(IntermediateILTransformedTarget);@(IntermediateILTransformedSymbols)" />
+      <FileWrites Include="$(IntermediateMetadataFile);$(IntermediateMetadataFile).log;$(ILMergeInfoFilename);@(ResFile)" />
+      <FileWrites Include="$(IntermediateOutputPath)**\*.repro" />
+    </ItemGroup>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- During a shareable assembly build, check that the shareable assemblies being produced form a closure. -->
+  <!-- Also, as a side effect, the list of shareable assemblies gets loaded. -->
+  <!-- ####################################################################################################################### -->
+
+  <Target Name="CheckSharedAssemblyClosure"
+      DependsOnTargets="RunILTransforms"
+      Condition="'$(BuildSharedAssemblies)' == 'true'">
+
+    <ItemGroup>
+      <SharedAssemblyRoots Include="$(ILTransformedIntermediatePath)%(OutputSharedAssemblyNames.Identity).ildll" />
+    </ItemGroup>
+
+    <ItemGroup
+      Condition="'$(UseSharedAssemblies)' == 'true'">
+      <SharedAssemblyRoots Include="@(InputSharedAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyILTransformedFolderName)\%(Identity).ildll')" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <SharedAssemblyLibPaths Include="$(ILTransformedIntermediatePath)" />
+      <SharedAssemblyLibPaths Include="@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyILTransformedFolderName)')" Condition="'$(UseSharedAssemblies)' == 'true'" />
+      <SharedAssemblyLibPaths Include="@(ILSearchPath)" />
+      <SharedAssemblyLibPaths Include="@(ExternalReferencePaths)" /> 
+    </ItemGroup>
+
+    <Message Text="Running AssemblyClosureTask in CheckSharedAssemblyClosure" />
+    <!-- Determine the closure of the shared assemblies.
+         Note the we skip all implicit dependencies since this operation is done on the final transformed assemblies.
+         Such assemblies should not have any unresolved types (they're after reduced copy which resolved everything)
+         and thus should have all references fully included. -->
+    <AssemblyClosureTask
+        RootAssemblies="@(SharedAssemblyRoots)"
+        FrameworkAssemblies="@(PreferredFrameworkAssemblies)"
+        LibPaths="@(SharedAssemblyLibPaths)"
+        IgnoreFacades="false"
+        IgnoreWinRtReferences="false"
+        SkipImplicitDependencies="true">
+      <Output TaskParameter="DependencyClosure" ItemName="SharedAssemblyClosure" />
+    </AssemblyClosureTask>
+
+    <ItemGroup>
+      <SharedAssemblyClosure Remove="%(SharedAssemblyRoots.Identity)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <SharedAssemblyList>@(SharedAssemblyRoots->'%(Identity)', ' - ')</SharedAssemblyList>
+      <ClosureAssemblyList>@(SharedAssemblyClosure->'%(Identity)', ' - ')</ClosureAssemblyList>
+    </PropertyGroup>
+
+    <IlcErrorTask
+        Condition="'@(SharedAssemblyClosure)' != ''"
+        ResourceName="Error_SharedAssemblyClosure"
+        Parameters="$(SharedAssemblyList);$(ClosureAssemblyList)" />
+
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Merge the pgo counts into the pgd file. -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="MergePgoCounts" Condition="'$(Pgu)'=='true' and '$(MultiPhasePgd)'!='true'">
+    <Exec Command="&quot;$(PgoMgrPath)&quot; -merge &quot;$(PgdPath)&quot;" />
+  </Target>
+
+  <!-- #################################### -->
+  <!-- IL to MDIL response file generation  -->
+  <!-- #################################### -->
+  <PropertyGroup>
+    <CommonMDILGenerationDependencies>RunILTransforms;CheckSharedAssemblyClosure;MergePgoCounts</CommonMDILGenerationDependencies>
+    <GenerateMDILTargetName>GenerateMDILSingleFile</GenerateMDILTargetName>
+    <GenerateMDILTargetName Condition="'$(MultiFile)' == 'true'">GenerateMDILMultiFile</GenerateMDILTargetName>
+    <GenerateMDILTargetName Condition="'$(MultifileSingleProcess)' == 'true'">GenerateMDILMultiFileSingleProcess</GenerateMDILTargetName>
+    <GenerateMDILResponseFileTargetName>GenerateMDILResponseFileSingleFile</GenerateMDILResponseFileTargetName>
+    <GenerateMDILResponseFileTargetName Condition="'$(MultiFile)' == 'true'">MDILPrepareMultiFile</GenerateMDILResponseFileTargetName>
+  </PropertyGroup>
+
+  <!-- #################################### -->
+  <!-- Prepare MDIL multifile build - collect transformed and consumed shared assemblies -->
+  <!-- #################################### -->
+  <Target Name="MDILPrepareMultiFile"
+    DependsOnTargets="$(CommonMDILGenerationDependencies)">
+
+    <IlcMessageTask Importance="High" ResourceName="Message_RunningNativeCompilers" />
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' != 'true'">
+      <!-- NUTC expects the target to be specified as the first /in file on the command line -->
+      <_AppNUTCReferences Include="@(IntermediateILTransformedTarget)" />
+      <_AppNUTCReferences Include="$(ILTransformedIntermediatePath)*.ildll" KeepDuplicates="false" />
+      <_AppNUTCReferences Include="$(ILTransformedIntermediatePath)*.ilexe" KeepDuplicates="false" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' == 'true'">
+      <_AppNUTCReferences Include="$(ILTransformedIntermediatePath)%(OutputSharedAssemblyNames.Identity).ildll" />
+      <OutputSharedILTocFiles Include="$(ILTocIntermediatePath)%(OutputSharedAssemblyNames.Identity).iltoc" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(UseSharedAssemblies)' == 'true'">
+      <!-- Remove shareable assemblies from the reference set -->
+      <_AppNUTCReferences
+        Remove="$(ILTransformedIntermediatePath)%(InputSharedAssemblyNames.Identity).ildll" />
+      <!-- Add shareable assemblies in their pre-built paths to the reference set -->
+      <ConsumedSharedAssemblies
+        Include="@(InputSharedAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyILTransformedFolderName)\%(Identity).ildll')">
+        <Binary Condition="'$(MergeSharedAssemblies)' == 'true'">%(InputSharedLibraryName)</Binary>
+        <Binary Condition="'$(MergeSharedAssemblies)' != 'true'">%(Identity)</Binary>
+        <BinarySpec Condition="'$(MergeSharedAssemblies)' == 'true'">*%(InputSharedLibraryName)</BinarySpec>
+      </ConsumedSharedAssemblies>
+      <!-- Create set of TOC files for the shareable assemblies -->
+      <ConsumedSharedILTocFiles
+        Include="@(InputSharedAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyILTocFolderName)\%(Identity).iltoc')">
+        <Binary Condition="'$(MergeSharedAssemblies)' == 'true'">%(InputSharedLibraryName)</Binary>
+        <Binary Condition="'$(MergeSharedAssemblies)' != 'true'">%(Identity)</Binary>
+        <BinarySpec Condition="'$(MergeSharedAssemblies)' == 'true'">*%(InputSharedLibraryName)</BinarySpec>
+      </ConsumedSharedILTocFiles>
+      <!-- Create set of TOC files for the shareable assemblies -->
+      <ConsumedSharedTocFiles
+        Include="@(InputSharedAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyTocFolderName)\%(Identity).toc')" />
+    </ItemGroup>
+
+    <!-- _AppNUTCReferences list is finalized and must not be changed after this point -->
+
+    <ItemGroup>
+      <!-- The set of output TOC files (not including the prebuilt shareable assemblies being consumed) -->
+      <IntermediateTocFiles Include="@(_AppNUTCReferences->'$(TocIntermediatePath)%(Filename).toc')" />
+    </ItemGroup>
+
+    <!-- Create set of baseline TOC files for the shareable assemblies -->
+    <ItemGroup Condition="'$(BaselineSharedAssemblyPath)' != ''">
+      <BaselineSharedTocFiles Include="@(_AppNUTCReferences->'$(BaselineSharedAssemblyPath)\$(SharedAssemblyTocFolderName)\%(Filename).toc')" />
+    </ItemGroup>
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Set Binary metadata for non-shared references -->
+  <!-- #################################### -->
+  <Target Name="SetBinaryForReferences" Outputs="%(_AppNUTCReferences.Identity)"
+    DependsOnTargets="MDILPrepareMultiFile">
+
+    <ItemGroup>
+      <_AppNUTCReferences Condition="@(_AppNUTCReferences->'%(Filename)')=='%(BinaryContents.AssemblyName)'">
+        <Binary>%(BinaryContents.Binary)</Binary>
+        <BinarySpec>*%(BinaryContents.Binary)</BinarySpec>
+      </_AppNUTCReferences>
+      <_AppNUTCReferences Condition="'$(BuildSharedAssemblies)'=='true' and '$(MergeSharedAssemblies)'=='true'">
+        <Binary>$(SharedAssembliesBinaryName)</Binary>
+        <BinarySpec>*$(SharedAssembliesBinaryName)</BinarySpec>
+      </_AppNUTCReferences>
+      <_AppNUTCReferences Condition="'$(BuildSharedAssemblies)'!='true' and '$(MergeNonSharedAssemblies)'=='true'">
+        <Binary>$(MainBinaryName)</Binary>
+        <BinarySpec>*$(MainBinaryName)</BinarySpec>
+      </_AppNUTCReferences>
+      <!-- If the binary name was not specified, default to the assembly file name -->
+      <_AppNUTCReferences Condition="'%(_AppNUTCReferences.Binary)'==''">
+        <Binary>%(Filename)</Binary>
+      </_AppNUTCReferences>
+    </ItemGroup>
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Set binary names for assemblies according to merge specifications -->
+  <!-- #################################### -->
+  <Target Name="SetBinaryForAssemblies"
+    DependsOnTargets="SetBinaryForReferences">
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Run NUTC global analysis -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDILGlobalAnalysis"
+    Inputs="@(IntermediateILTransformedTarget);@(IntermediateILTransformedSymbols)"
+    Outputs="@(IntermediateTocFiles)"
+    DependsOnTargets="SetBinaryForAssemblies">
+
+    <MakeDir Directories="$(TocIntermediatePath);$(MDILIntermediatePath)" />
+
+    <ItemGroup>
+      <!-- A copy of the list used in batching -->
+      <_AppNUTCReferences2 Include="@(_AppNUTCReferences)" />
+
+      <!-- The set of assemblies compiled into the main binary -->
+      <GlobalAnalysisInputFiles Include="@(_AppNUTCReferences)" Condition="'%(_AppNUTCReferences.Binary)'=='$(MainBinaryName)'"/>
+
+      <!-- The set of references for the global analysis -->
+      <GlobalAnalysisNUTCReferences Include="@(_AppNUTCReferences)" Exclude="@(GlobalAnalysisInputFiles)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <GlobalAnalysisResponseFileName>$(IntermediateOutputPath)tocgen.rsp</GlobalAnalysisResponseFileName>
+      <GlobalAnalysisResponseFileName Condition="'$(MultifileSingleProcess)' == 'true'">$(MDILIntermediatePath)$(MainBinaryName).rsp</GlobalAnalysisResponseFileName>
+
+      <AnalyzeAndCompile Condition="'$(BuildSharedAssemblies)'=='true' and '$(MergeSharedAssemblies)'=='true'">true</AnalyzeAndCompile>
+      <AnalyzeAndCompile Condition="'$(UseSharedAssemblies)'=='true' and '$(MergeNonSharedAssemblies)'=='true' and '$(MultifileNoGlobalAnalysis)'!='true'">true</AnalyzeAndCompile>
+      <BuildTocFiles Condition="'$(MultifileNoGlobalAnalysis)'!='true' and ('$(AnalyzeAndCompile)'!='true' or '$(BuildSharedAssemblies)'=='true')">true</BuildTocFiles>
+
+      <_NUTCArguments>$(CommonNUTCArguments)</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(GlobalAnalysisInputFiles->'/in "%(Identity)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); /out "@(IntermediateMDILTarget)"</_NUTCArguments>
+      <_NUTCArguments Condition="'$(InternalFeatureSwitch_ExpandedILToc)' != 'true'">$(_NUTCArguments); @(ConsumedSharedAssemblies->'/sr "%(Identity)%(BinarySpec)"')</_NUTCArguments>
+      <_NUTCArguments Condition="'$(InternalFeatureSwitch_ExpandedILToc)' == 'true'">$(_NUTCArguments); @(ConsumedSharedILTocFiles->'/iltoc "%(Identity)%(BinarySpec)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(ConsumedSharedTocFiles->'/toc "%(Identity)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(GlobalAnalysisNUTCReferences->'/r "%(Identity)%(BinarySpec)"')</_NUTCArguments>
+      <_NUTCArguments Condition="'$(BuildTocFiles)' == 'true'">$(_NUTCArguments); /buildTocFiles "$(TocIntermediatePath)\"</_NUTCArguments>
+      <_NUTCArguments Condition="'$(AnalyzeAndCompile)' == 'true'">$(_NUTCArguments); /analyzeAndCompile</_NUTCArguments>
+      <_NUTCArguments Condition="'$(Pgi)'=='true'"> $(_NUTCArguments) /w full /o "/d2pgi$(MDILIntermediatePath)$(MainBinaryName).pgd"</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(BaselineSharedTocFiles->'/baselineToc "%(Identity)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(OutputSharedILTocFiles->'/exportiltoc "%(Identity)"')</_NUTCArguments>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(GlobalAnalysisResponseFileName)" Lines="$(_NUTCArguments)" Overwrite="true" />
+
+    <ItemGroup>
+      <NutcCommandForGlobalAnalysis Include="$(NUTCPath)">
+        <Arguments>@"$(GlobalAnalysisResponseFileName)"</Arguments>
+        <DisplayName>Nutc GlobalAnalysis</DisplayName>
+      </NutcCommandForGlobalAnalysis>
+    </ItemGroup>
+
+    <StartProcessTask
+        Commands="@(NutcCommandForGlobalAnalysis)"
+        StandardOutputImportance="low"
+        UpgradeableWarnings="@(UpgradeableWarningsOut)" />
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Generate NUTC response files for multifile mode -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDILResponseFilesMultiFile"
+    Inputs="@(IntermediateILTransformedTarget);@(IntermediateILTransformedSymbols)"
+    Outputs="$(MDILIntermediatePath)%(_AppNUTCReferences.Binary).rsp"
+    DependsOnTargets="GenerateMDILGlobalAnalysis">
+
+    <ItemGroup>
+      <_FilteredNUTCReferences Remove="%(_FilteredNUTCReferences.Identity)" />
+      <_FilteredNUTCReferences Include="@(_AppNUTCReferences2)" Exclude="@(_AppNUTCReferences)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <NUTCResponseFileName>$(MDILIntermediatePath)%(_AppNUTCReferences.Binary).rsp</NUTCResponseFileName>
+
+      <MDILOutputExtension>mdildll</MDILOutputExtension>
+      <MDILOutputExtension Condition="'%(_AppNUTCReferences.Extension)' == '.ilexe'">mdilexe</MDILOutputExtension>
+      <_NUTCArguments>$(CommonNUTCArguments)</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(_AppNUTCReferences->'/in "%(Identity)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); /out "$(MDILIntermediatePath)%(_AppNUTCReferences.Binary).$(MDILOutputExtension)"</_NUTCArguments>
+      <_NUTCArguments Condition="'$(InternalFeatureSwitch_ExpandedILToc)' != 'true'">$(_NUTCArguments); @(ConsumedSharedAssemblies->'/sr "%(Identity)%(BinarySpec)"')</_NUTCArguments>
+      <_NUTCArguments Condition="'$(InternalFeatureSwitch_ExpandedILToc)' == 'true'">$(_NUTCArguments); @(ConsumedSharedILTocFiles->'/iltoc "%(Identity)%(BinarySpec)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(ConsumedSharedTocFiles->'/toc "%(Identity)"')</_NUTCArguments>
+      <_NUTCArguments Condition="'$(Pgi)'=='true'"> $(_NUTCArguments) /w full /o "/d2pgi$(MDILIntermediatePath)$(MainBinaryName).pgd"</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(_FilteredNUTCReferences->'/r "%(Identity)%(BinarySpec)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(IntermediateTocFiles->'/toc "%(Identity)"')</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); @(BaselineSharedTocFiles->'/baselineToc "%(Identity)"')</_NUTCArguments>
+      <MultiFileNutcCommandDisplayText>Nutc MultiFile %(_AppNUTCReferences.Binary)</MultiFileNutcCommandDisplayText>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(NUTCResponseFileName)" Lines="$(_NUTCArguments)" Overwrite="true" />
+
+    <ItemGroup>
+      <NutcCommandForMultiFile Include="$(NUTCPath)">
+        <Arguments>@"$(NUTCResponseFileName)"</Arguments>
+        <DisplayName>$(MultiFileNutcCommandDisplayText)</DisplayName>
+      </NutcCommandForMultiFile>
+    </ItemGroup>
+  </Target>
+
+  <!-- #################################### -->
+  <!-- IL to MDIL - multifile mode (two NUTC processes) -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDILMultiFile"
+    Outputs="@(IntermediateMDILTarget);@(IntermediateMDILSymbols)"
+    DependsOnTargets="GenerateMDILResponseFilesMultiFile">
+
+    <StartProcessTask
+        Commands="@(NutcCommandForMultiFile)"
+        DegreeOfParallelization="$(DegreeOfParallelization)"
+        StandardOutputImportance="low" 
+        UpgradeableWarnings="@(UpgradeableWarningsOut)" />
+
+  </Target>
+
+  <!-- #################################### -->
+  <!-- IL to MDIL - multifile mode (single NUTC process) -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDILMultiFileSingleProcess"
+    Outputs="@(IntermediateMDILTarget);@(IntermediateMDILSymbols)"
+    DependsOnTargets="GenerateMDILGlobalAnalysis">
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Generate NUTC response file for single file mode -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDILResponseFileSingleFile"
+    Inputs="@(IntermediateILTransformedTarget);@(IntermediateILTransformedSymbols)"
+    Outputs="$(IntermediateOutputPath)nutcargs.rsp"
+    DependsOnTargets="$(CommonMDILGenerationDependencies)">
+
+    <IlcMessageTask Importance="High" ResourceName="Message_RunningNativeCompilers" />
+    <MakeDir Directories="$(MDILIntermediatePath)" />
+
+    <PropertyGroup>
+      <_NUTCArguments>$(CommonNUTCArguments)</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); /in "@(IntermediateILTransformedTarget)"</_NUTCArguments>
+      <_NUTCArguments>$(_NUTCArguments); /out "@(IntermediateMDILTarget)"</_NUTCArguments>
+      <_NUTCArguments Condition="'$(Pgi)'=='true'"> $(_NUTCArguments) /w full /o "/d2pgi$(MDILIntermediatePath)$(MainBinaryName).pgd"</_NUTCArguments>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(IntermediateOutputPath)nutcargs.rsp" Lines="$(_NUTCArguments)" Overwrite="true" />
+    <ItemGroup>
+      <NutcCommandForSingleFile Include="$(NUTCPath)">
+        <Arguments>@"$(IntermediateOutputPath)nutcargs.rsp"</Arguments>
+        <DisplayName>Nutc SingleFile</DisplayName>
+      </NutcCommandForSingleFile>
+    </ItemGroup>
+  </Target>
+
+  <!-- #################################### -->
+  <!-- IL to MDIL - single file mode -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDILSingleFile"
+    Inputs="$(IntermediateOutputPath)nutcargs.rsp"
+    Outputs="@(IntermediateMDILTarget);@(IntermediateMDILSymbols)"
+    DependsOnTargets="GenerateMDILResponseFileSingleFile">
+
+    <StartProcessTask
+        Commands="@(NutcCommandForSingleFile)"
+        DegreeOfParallelization="$(DegreeOfParallelization)"
+        StandardOutputImportance="low" 
+        UpgradeableWarnings="@(UpgradeableWarningsOut)" />
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Compile IL to MDIL with NUTC -->
+  <!-- #################################### -->
+  <Target Name="GenerateMDIL"
+    Inputs="$(IntermediateOutputPath)nutcargs.rsp"
+    Outputs="@(IntermediateMDILTarget);@(IntermediateMDILSymbols)"
+    DependsOnTargets="$(GenerateMDILTargetName)">
+
+    <ItemGroup>
+      <!-- Note: this list does not include $(MainBinaryName).mdilexe -->
+      <MdilFiles Condition="'$(BuildSharedAssemblies)' != 'true'" Include="$(MDILIntermediatePath)*.mdildll" />
+      <MdilFiles Condition="'$(BuildSharedAssemblies)' == 'true'" Include="$(MDILIntermediatePath)%(_AppNUTCReferences.Binary).mdildll" />
+      <IntermediateNativeTarget Include="@(MdilFiles->'$(NativeIntermediatePath)%(Filename).dll')"/>
+    </ItemGroup>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- BuildInfo.rc, @(ResFile) -> Native.res -->
+  <!-- ####################################################################################################################### -->
+  <PropertyGroup>
+    <BuildInfoResource>$(IntermediateOutputPath)BuildInfo\BuildInfo.res</BuildInfoResource>
+    <NativeResource>$(IntermediateOutputPath)Native.res</NativeResource>
+  </PropertyGroup>
+    
+  <Target Name="GenerateBuildInfo"
+          Inputs="$(BuildInfoResourceScript);@(ResFile)"
+          Outputs="$(NativeResource)">
+      
+    <ItemGroup>
+      <RCCommand Include="$(RCPath)">
+        <!-- 65001 is the code page for UTF-8, which is the encoding of input file generated for RC by ILC -->
+        <Arguments>/c 65001 /r /fo "$(BuildInfoResource)" "$(BuildInfoResourceScript)"</Arguments>
+        <DisplayName>RC</DisplayName>
+      </RCCommand>
+    </ItemGroup>
+    <StartProcessTask Condition="'$(BuildInfoResourceScript)'!=''"
+          Commands="@(RCCommand)" StandardOutputImportance="low" />
+
+    <ItemGroup>
+      <_NativeResources Include="@(ResFile)"  />
+      <_NativeResources Include="$(BuildInfoResource)" />
+    </ItemGroup>
+
+    <BinaryConcatenateTask InputFiles="@(_NativeResources)" OutputFile="$(NativeResource)" Alignment="4" />
+  </Target>
+
+  <!-- #################################### -->
+  <!-- Prepare binding - create native folder and initialize IntermediateNativeAppDll with app DLL file -->
+  <!--                   when UseShimExe is set -->
+  <!-- #################################### -->
+  <Target Name="MDILBindPrepare"
+    DependsOnTargets="GenerateMDIL;GenerateBuildInfo">
+
+    <MakeDir Directories="$(NativeIntermediatePath)" />
+
+    <ItemGroup>
+      <PgoCvtCommand Include="$(PgoCvtPath)">
+        <Arguments>/machine:$(TargetBuildArchitecture) /out:"$(MDILIntermediatePath)$(MainBinaryName)pgd.obj" "$(MDILIntermediatePath)$(MainBinaryName).pgd"</Arguments>
+        <DisplayName>PgoCvt</DisplayName>
+      </PgoCvtCommand>
+    </ItemGroup>
+    <!-- Produce object file from pgd file -->
+    <StartProcessTask Condition="'$(Pgi)'=='true'" Commands="@(PgoCvtCommand)" StandardOutputImportance="low" />
+
+    <PropertyGroup>
+        <!-- Policy choice: we've chosen to make all apps use the shim exe (instead of just those with managed
+             winmd files) to give a uniform experience to all apps.  We could, however, change our minds and 
+             only use the shim exe when there are managed winmd files that require it.  So for now, we've left
+             out the Condition="'@(ManagedWinMDs)' != ''" here-->
+        <UseShimExe>true</UseShimExe>
+        <UseShimExe Condition="'$(InternalFeatureSwitch_R2RLauncher)' == 'true'">false</UseShimExe>
+    </PropertyGroup>
+  </Target>
+
+  <!-- #################################### -->
+  <!-- MDIL to Native response file generation -->
+  <!-- #################################### -->
+  <Target Name="MDILBindCreateResponseFiles"
+    Inputs="@(IntermediateMDILTarget);@(IntermediateMDILSymbols);@(ImplDependencyMDILAssemblies)"
+    Outputs="$(IntermediateOutputPath)rhbindargs.%(IntermediateNativeTarget.Filename).rsp"
+    DependsOnTargets="MDILBindPrepare">
+
+    <PropertyGroup>
+      <OutputResponseFileName>$(IntermediateOutputPath)rhbindargs.%(IntermediateNativeTarget.Filename).rsp</OutputResponseFileName>
+      <RhBindCommandLine>"$(RhBindPath)" @"$(OutputResponseFileName)"</RhBindCommandLine>
+      <OutputMdilSubExtensionWithDot>%(IntermediateNativeTarget.Extension)</OutputMdilSubExtensionWithDot>
+      <OutputMdilSubExtension>$(OutputMdilSubExtensionWithDot.Substring(1))</OutputMdilSubExtension>
+
+      <RhBindArgs>$(CommonRhBindArguments); "$(MDILIntermediatePath)%(IntermediateNativeTarget.Filename).mdil$(OutputMdilSubExtension)"</RhBindArgs>
+      <RhBindArgs>$(RhBindArgs); "/i:$(MDILIntermediatePath)"</RhBindArgs>
+      <RhBindArgs>$(RhBindArgs); /out:"%(IntermediateNativeTarget.Identity)"</RhBindArgs>
+      <RhBindArgs Condition="Exists('$(NativeResource)')">$(RhBindArgs); "/res:$(NativeResource)"</RhBindArgs>
+      <RhBindArgs Condition="'$(UseSharedAssemblies)' == 'true'">$(RhBindArgs);@(InputSharedAssemblyPaths->'"/i:%(Identity)\$(SharedAssemblyMDILFolderName)"')</RhBindArgs>
+      <RhBindArgs Condition="'$(MultiFile)'!='true' and '$(OutputMdilSubExtension)'=='exe'">$(RhBindArgs); /standalone</RhBindArgs>
+      <RhBindArgs Condition="'$(DumpIlcLogs)' == 'true'">$(RhBindArgs); /map:"$(NativeIntermediatePath)%(IntermediateNativeTarget.Filename).map"</RhBindArgs>
+      <RhBindArgs Condition="'$(DumpIlcLogs)' == 'true' and '$(BuildSharedAssemblies)' == 'true'">$(RhBindArgs); /genericDictionariesLog:"$(NativeIntermediatePath)%(IntermediateNativeTarget.Filename).genericdictionaries.txt"</RhBindArgs>
+      <RhBindArgs Condition="'$(DumpIlcLogs)' == 'true' and '$(BuildSharedAssemblies)' == 'true'">$(RhBindArgs); /typeLayoutLog:"$(NativeIntermediatePath)%(IntermediateNativeTarget.Filename).typelayout.txt"</RhBindArgs>
+      <RhBindArgs Condition="'$(UseShimExe)'=='true' and '$(OutputMdilSubExtension)'=='exe'">$(RhBindArgs); /shimexe</RhBindArgs>
+      <RhBindArgs Condition="'$(MultiFile)'=='true'">$(RhBindArgs); /classlib:$(FixedCoreBinaryName)</RhBindArgs>
+      <RhBindArgs Condition="'$(Pgi)'=='true'">$(RhBindArgs) "/nativelink:$(PgoRtPath)" "/nativelink:$(MDILIntermediatePath)$(MainBinaryName)pgd.obj"</RhBindArgs>
+      <RhBindArgs Condition="'$(Pgu)'=='true'">$(RhBindArgs) "/useprofile:$(MDILIntermediatePath)$(MainBinaryName).profile"</RhBindArgs>
+      <RhBindArgs Condition=" '$(RH_GCSTRESS_MODE)'=='1' ">$(RhBindArgs); /gcstress</RhBindArgs>
+      <RhBindArgs Condition="'$(RhbindSuppressWarnings)' != '' ">$(RhBindArgs); $(RhbindSuppressWarnings)</RhBindArgs>
+
+      <RhBindArgs Condition="'$(MultiFile)'!='true' or '%(IntermediateNativeTarget.Filename)'=='$(InteropBinaryName)'">$(RhBindArgs); "/nativelink:$(InteropNativeLibPath)"</RhBindArgs>
+      <RhBindArgs Condition="'$(MultiFile)'!='true' or '%(IntermediateNativeTarget.Filename)'=='$(FixedCoreBinaryName)'">$(RhBindArgs); "/nativelink:$(CoreLibNativeLibPath)"</RhBindArgs>
+      <RhBindArgs Condition="'$(MultiFile)'!='true' or '%(IntermediateNativeTarget.Filename)'=='$(TypeLoaderBinaryName)' or '%(IntermediateNativeTarget.Filename)'=='$(OutputSharedInteropAssemblyName)'">$(RhBindArgs); "/nativelink:$(TypeLoaderNativeLibPath)"</RhBindArgs>
+      <RhBindCommandDisplayText>rhbind %(IntermediateNativeTarget.Filename)</RhBindCommandDisplayText>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(OutputResponseFileName)" Lines="$(RhBindArgs)" Overwrite="true"/>
+
+    <ItemGroup>
+      <IntermediateNativeAppDll
+        Include="%(IntermediateNativeTarget.Identity)">
+        <!-- In R2R mode we replace the native EXE with the R2R launcher executable -->
+        <Exclude>$(InternalFeatureSwitch_R2R)</Exclude>
+      </IntermediateNativeAppDll>
+      <FileWrites Include="$(OutputResponseFileName)" />
+      <RhBindCmd Include="$(RhBindPath)">
+        <Arguments>@"$(OutputResponseFileName)"</Arguments>
+        <DisplayName>$(RhBindCommandDisplayText)</DisplayName>
+      </RhBindCmd>
+    </ItemGroup>
+  </Target>
+
+  <!-- #################################### -->
+  <!-- MDIL to Native -->
+  <!-- #################################### -->
+  <Target Name="MDILBind"
+    Inputs="@(IntermediateMDILTarget);@(IntermediateMDILSymbols);@(ImplDependencyMDILAssemblies)"
+    Outputs="@(IntermediateNativeAppDll)"
+    DependsOnTargets="MDILBindCreateResponseFiles">
+
+    <IlcMessageTask Importance="High" ResourceName="Message_RunningBinder" />
+    <StartProcessTask
+      Commands="@(RhBindCmd)"
+      StandardOutputImportance="low"
+      DegreeOfParallelization="$(DegreeOfParallelization)"
+      UpgradeableWarnings="@(UpgradeableWarningsOut)" />
+    
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' != 'true'">
+      <!-- For main module with shim EXE, add the application DLL to the native library list -->
+      <IntermediateNativeAppDll
+        Condition="'$(UseShimExe)' == 'true'"
+        Include="$(NativeIntermediatePath)*.dll" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <!-- Pdb file name can be different from original exe name, if non-ANSI characters are involved. -->
+      <!-- Thus we look for *.pdb, instead of guessing what name was used by RhBind. -->
+      <IntermediateNativeSymbols Include="$(NativeIntermediatePath)*.pdb" />
+      <FileWrites Include="@(IntermediateNativeAppDll);@(IntermediateNativeSymbols);@(IntermediateRhBindMap)" />
+    </ItemGroup>
+    <Move Condition="'$(PdbPath)'!=''" SourceFiles="@(IntermediateNativeSymbols)" DestinationFolder="$(PdbPath)" />
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Generate version info resource for the fake main file when building the shared library -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="GenerateVersionInfoForFakeExe"
+    Condition="'$(BuildSharedAssemblies)' == 'true'"
+    Outputs="$(VersionInfoBinary)">
+
+    <PropertyGroup Condition="'$(BuildSharedAssemblies)' == 'true'">
+        <VersionInfoBinary>$([System.IO.Path]::ChangeExtension('$(VersionInfoResourceScript)', 'res'))</VersionInfoBinary>
+    </PropertyGroup>
+
+    <StartProcessTask
+        Commands="&quot;$(RCPath)&quot; /r /fo &quot;$(VersionInfoBinary)&quot; &quot;$(VersionInfoResourceScript)&quot;"
+        StandardOutputImportance="low" />
+
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Generates an executable that references all managed WinMDs if InputILTarget doesn't exist -->
+  <!-- ####################################################################################################################### -->
+  <PropertyGroup>
+    <FakeSourceFile>$(IntermediateOutputPath)fake.cs</FakeSourceFile>
+  </PropertyGroup>
+  <Target Name="GenerateFakeExe"
+    Outputs="@(InputILTarget)"
+    Condition="!Exists('@(InputILTarget)')"
+    DependsOnTargets="GenerateVersionInfoForFakeExe">
+
+    <WriteLinesToFile File="$(FakeSourceFile)" Lines="public class Fake { public static void Main() { } }" />
+    <PropertyGroup>
+        <SharedAssemblyDummyAppReferences>$(FixedCoreAssemblyPath)</SharedAssemblyDummyAppReferences>
+    </PropertyGroup>
+
+    <Csc
+      AllowUnsafeBlocks="true"
+      DebugType="full"
+      NoConfig="true"      
+      NoStandardLib="true"
+      OutputAssembly="@(InputILTarget)"
+      PdbFile="@(InputILSymbols)"
+      Win32Resource="$(VersionInfoBinary)"
+      References="$(SharedAssemblyDummyAppReferences)"
+      Sources="$(FakeSourceFile)"
+      TargetType="winexe"
+    />
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Modify System.Private.CoreLib.dll  -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="InjectCoreLibTypeForwards"
+          Condition="'$(UseSharedAssemblies)' != 'true'">
+
+    <ItemGroup>
+      <InjectCoreLibTypeForwardsTransforms Include="InjectCoreLibTypeForwards">
+         <SystemRuntimeFacadePath>$(FrameworkILPath)$(SystemRuntimePartialFacadeAssemblyName).dll</SystemRuntimeFacadePath>
+         <SystemRuntimeImplementationPath>$(IntermediateTransformedCoreLibPath)$(SystemRuntimeImplementationAssemblyName).dll</SystemRuntimeImplementationPath>
+         <SystemRuntimePureFacadePath>$(IntermediateTransformedCoreLibPath)$(SystemRuntimePureFacadeAssemblyName).dll</SystemRuntimePureFacadePath>
+      </InjectCoreLibTypeForwardsTransforms>
+
+      <InjectCoreLibTypeForwardsTransforms Include="InjectCoreLibIReflectableTypeSupport">
+      </InjectCoreLibTypeForwardsTransforms>
+    </ItemGroup>
+
+    <MakeDir Directories="$(IntermediateTransformedCoreLibPath)" />
+    <ILTransformTask
+      InputAssembly="$(FixedCoreAssemblyPath)"
+      OutputAssembly="$(IntermediateTransformedCoreLibPath)$(FixedCoreAssemblyName).dll"
+      ILTransforms="@(InjectCoreLibTypeForwardsTransforms)"
+      CoreAssemblyName="$(FixedCoreAssemblyName)"
+      LibPaths="$(FrameworkPrivatePath);$(FrameworkILPath)"
+      DeepCopyAssembly="True"
+      DontSaveUnlessChangesMade="false"
+      RunMetadataValidator="$(RunILTransformMetadataValidator)"
+      SuppressWarnings="$(ILTransformSuppressWarnings)"
+      ExceptionLoggerPtr="$(ExceptionLogger)"
+    >
+    </ILTransformTask>
+
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Modify System.Runtime.WindowsRuntime.dll  -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="InjectWindowsRuntimeTypeForwards">
+    <ItemGroup>
+      <InjectWindowsRuntimeTypeForwardsTransform Include="InjectWindowsRuntimeTypeForwards">
+        <SystemRuntimeWindowsRuntimeImplementationPath>$(FrameworkPrivatePath)$(InteropAssemblyName).dll</SystemRuntimeWindowsRuntimeImplementationPath>
+      </InjectWindowsRuntimeTypeForwardsTransform>
+    </ItemGroup>
+    <MakeDir Directories="$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)" />
+    <ILTransformTask
+      InputAssembly="$(FrameworkILPath)$(SystemRuntimeWindowsRuntimeAssemblyName).dll"
+      OutputAssembly="$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)$(SystemRuntimeWindowsRuntimeAssemblyName).dll"
+      ILTransforms="@(InjectWindowsRuntimeTypeForwardsTransform)"
+      CoreAssemblyName="$(FixedCoreAssemblyName)"
+      LibPaths="$(FrameworkPrivatePath);$(FrameworkILPath)"
+      DeepCopyAssembly="True"
+      DontSaveUnlessChangesMade="false"
+      RunMetadataValidator="$(RunILTransformMetadataValidator)"
+      SuppressWarnings="$(ILTransformSuppressWarnings)"
+      ExceptionLoggerPtr="$(ExceptionLogger)"
+    >
+    </ILTransformTask>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Remove portable library references if any  -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="PreResolveTransforms"
+          Inputs="@(InputILTarget)"
+          Outputs="@(IntermediatePreMergeILTransformedExeTarget)"
+          DependsOnTargets="InjectCoreLibTypeForwards">
+
+    <MakeDir Directories="$(IntermediatePreMergeILTransformedPath)" />
+
+    <ItemGroup>
+      <AssemblyClosureLibPaths Include="$(InputPath)" />
+      <AssemblyClosureLibPaths Include="$(FrameworkILPath)" />
+      <AssemblyClosureLibPaths Include="$(FrameworkFacadesPath)" />
+      <AssemblyClosureLibPaths Include="$(TargetPlatformSdkMetadataLocation)" />
+      <AssemblyClosureLibPaths Include="$(PreResolveDependenciesPath)" />
+      <AssemblyClosureLibPaths Include="@(ExternalReferencePaths)" />
+      <AssemblyClosureLibPaths Include="$(FrameworkPrivatePath)" />
+    </ItemGroup>
+
+    <Message Text="Running AssemblyClosureTask in PreResolveTransforms" />
+    <AssemblyClosureTask
+      RootAssemblies="@(InputILTarget);@(ManagedDlls)"
+      FrameworkAssemblies="@(PreferredFrameworkAssemblies)"
+      LibPaths="@(AssemblyClosureLibPaths)"
+      IgnoreFacades="true"
+      DetectNeedForPremergeTransforms="true"
+      IgnoreWinRtReferences="true"
+    >
+      <Output TaskParameter="DependencyClosure" ItemName="PreresolveDependencyClosure" />
+      <Output TaskParameter="MustRunPremergeTransforms" PropertyName="MustRunPremergeTransforms"/>
+    </AssemblyClosureTask>
+
+    <ItemGroup>
+      <TargetFrameworkContracts Include="@(FrameworkImplementationAssemblies)" />
+    </ItemGroup>
+    
+    <PropertyGroup>
+      <PreResolveContractAssemblyName>System.Private.CoreLib</PreResolveContractAssemblyName>
+      <PreResolveLibPaths>$(FrameworkPrivatePath);$(FrameworkILPath);$(FrameworkFacadesPath);$(PreResolveDependenciesPath)</PreResolveLibPaths>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <!-- ResolveSelfReferences ensures that the typerefs PortableLib processes will work -->
+      <PreResolveTransforms Include="ResolveSelfReferences" Condition="'$(MustRunPremergeTransforms)'=='true'" />
+      <PreResolveTransforms Include="RemoveDuplicateMembers" Condition="'$(MustRunPremergeTransforms)'=='true'" />
+      <!-- Run PortableLib first as it gets rid of all the old-style portable library references that none of the other transforms expect to see. -->
+      <PreResolveTransforms Include="PortableLib" Condition="'$(MustRunPremergeTransforms)'=='true'">
+        <FrameworkImplementationAssemblies>@(FrameworkImplementationAssemblies)</FrameworkImplementationAssemblies>
+        <TargetFrameworkContracts>@(TargetFrameworkContracts)</TargetFrameworkContracts>
+      </PreResolveTransforms>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PreResolveTransformInputAssemblies Include="@(InputILTarget)" />
+      <PreResolveTransformInputAssemblies Include="@(ManagedDlls)" />
+      <PreResolveTransformInputAssemblies Include="@(PreresolveDependencyClosure)" Condition="'$(MustRunPremergeTransforms)'=='true'" />
+
+      <!-- Don't waste time running the plib transform on assemblies shipped with ILC -->
+      <PreResolveTransformInputAssemblies Remove="@(TargetFrameworkContracts)" />
+      <PreResolveTransformInputAssemblies Remove="$(PreResolveDependenciesPath)*.dll" />
+    </ItemGroup>
+      
+    <!-- 
+      PreResolveTransforms need to work against the contracts and have System.Runtime as the core assembly to ensure things 
+      before merge (i.e. SG and MCG) don't have to live in a split world with some implementation and some contracts.
+    -->
+    <ILTransformTask
+      InputAssembly="@(PreResolveTransformInputAssemblies)"
+      OutputAssembly="$(IntermediatePreMergeILTransformedPath)"
+      ILTransforms="@(PreResolveTransforms)"
+      CoreAssemblyName="$(PreResolveContractAssemblyName)"
+      LibPaths="$(PreResolveLibPaths)"
+      PlatformWinMDFiles="@(TargetPlatformSdkWinMDFiles)"
+      DontSaveUnlessChangesMade="true"
+      RunMetadataValidator="$(RunILTransformMetadataValidator)"
+      Condition="'@(PreResolveTransforms)' != ''"
+      DeepCopyAssembly="True"
+      SuppressWarnings="$(ILTransformSuppressWarnings)"
+      ExceptionLoggerPtr="$(ExceptionLogger)"
+    >
+      <Output TaskParameter="ILTransforms" ItemName="_ILTransformsOut" />
+    </ILTransformTask>
+
+    <Copy
+      SourceFiles="@(InputILSymbols)"
+      DestinationFiles="@(IntermediatePreMergeILTransformedExeSymbols)"
+      SkipUnchangedFiles="$(SkipCopyUnchangedFiles)"
+      Condition="!Exists('@(IntermediatePreMergeILTransformedExeTarget)') and Exists('@(InputILSymbols)')" />
+
+    <Copy
+      SourceFiles="@(InputILTarget)" 
+      DestinationFiles="@(IntermediatePreMergeILTransformedExeTarget)"
+      SkipUnchangedFiles="$(SkipCopyUnchangedFiles)"
+      Condition="!Exists('@(IntermediatePreMergeILTransformedExeTarget)')" />     
+
+    <ItemGroup>
+      <FileWrites Include="@(IntermediatePreMergeILTransformedExeTarget)" />
+    </ItemGroup>
+    
+    <!-- Copy MCG generated DLLs (we only support 1 for now) from the app -->
+    <ItemGroup>
+      <McgPatchDllsCopyTarget Include="$(McgCompileOutputDirectory)\$(AppInteropAssemblyName).dll" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(McgPatchDlls)" 
+      DestinationFiles="@(McgPatchDllsCopyTarget)"
+      Condition="'$(HasMcgPatchDlls)'=='true'"/>   
+  </Target>
+
+
+  <!-- ####################################################################################################################### -->
+  <!-- Set InputSharedAssemblyNames/InputSharedAssemblyPaths/InputSharedInteropAssemblyNames                                   -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="SetForSharedInputs"
+          Condition="'$(UseSharedAssemblies)' == 'true'"
+          Outputs="%(InSharedLibraryNames.Identity)">
+
+    <PropertyGroup>
+      <InputSharedAssemblyPath Condition="'%(InSharedLibraryNames.Identity)' != $(CoreSharedLibraryName)">$(InSharedAssemblyPath)\%(InSharedLibraryNames.Identity)</InputSharedAssemblyPath>
+      <InputSharedAssemblyPath Condition="'%(InSharedLibraryNames.Identity)' == $(CoreSharedLibraryName)">$(InSharedAssemblyPath)</InputSharedAssemblyPath>
+      <InputSharedAssemblyListPath>$(InputSharedAssemblyPath)\$(SharedAssemblyFolderPerBuildMode)\$(SharedAssemblyListFileName)</InputSharedAssemblyListPath>
+      <InputSharedLibraryName>%(InSharedLibraryNames.Identity)</InputSharedLibraryName>
+      <InputSharedInteropAssemblyName>System.Private.$(InputSharedLibraryName).Interop.Generated</InputSharedInteropAssemblyName>
+    </PropertyGroup>
+
+    <IlcErrorTask
+      Condition="!Exists('$(InputSharedAssemblyListPath)')"
+      ResourceName="Error_SharedLibraryMissingArtifact"
+      Parameters="$(InputSharedLibraryName);$(InputSharedAssemblyListPath)" />
+
+    <ReadLinesFromFile
+      File="$(InputSharedAssemblyListPath)">
+      <Output TaskParameter="Lines" ItemName="InSharedAssemblyNames" />
+    </ReadLinesFromFile>
+
+    <ItemGroup>
+      <SharedLibraryContent Remove="*" />
+      <SharedLibraryContent Include="$(SharedAssemblyFolderPerBuildMode)\SharedAssemblyILMergeInfo.csv" />
+      <SharedLibraryContent Include="$(SharedAssemblyFolderPerBuildMode)\$(InputSharedLibraryName).iltransformtoc.ildll" />
+      <SharedLibraryContent Include="$(SharedAssemblyAnalysisILTocFolderName)\%(InSharedAssemblyNames.Identity).iltoc" />
+      <SharedLibraryContent Include="$(SharedAssemblyAnalysisILTocFolderName)\$(InputSharedInteropAssemblyName).iltoc" />
+      <SharedLibraryContent Include="$(SharedAssemblyAnalysisILTocFolderName)\%(InSharedAssemblyNames.Identity).iltocpdb" />
+      <SharedLibraryContent Include="$(SharedAssemblyAnalysisILTocFolderName)\$(InputSharedInteropAssemblyName).iltocpdb" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTocFolderName)\%(InSharedAssemblyNames.Identity).iltoc" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTocFolderName)\$(InputSharedInteropAssemblyName).iltoc" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTocFolderName)\%(InSharedAssemblyNames.Identity).iltocpdb" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTocFolderName)\$(InputSharedInteropAssemblyName).iltocpdb" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTransformedFolderName)\%(InSharedAssemblyNames.Identity).ildll" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTransformedFolderName)\$(InputSharedInteropAssemblyName).ildll" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTransformedFolderName)\%(InSharedAssemblyNames.Identity).ilpdb" />
+      <SharedLibraryContent Include="$(SharedAssemblyILTransformedFolderName)\$(InputSharedInteropAssemblyName).ilpdb" />
+      <SharedLibraryContent Include="$(SharedAssemblyTocFolderName)\%(InSharedAssemblyNames.Identity).toc" />
+      <SharedLibraryContent Include="$(SharedAssemblyMDILFolderName)\$(InputSharedLibraryName).mdildll" />
+    </ItemGroup>
+
+    <IlcErrorTask
+      Condition="!Exists('$(InputSharedAssemblyPath)\%(SharedLibraryContent.Identity)')"
+      ResourceName="Error_SharedLibraryMissingArtifact"
+      Parameters="$(InputSharedLibraryName);$(InputSharedAssemblyPath)\%(SharedLibraryContent.Identity)" />
+
+    <!-- InputSharedLibraryPaths, paths to the individual shared library artifact roots -->
+    <ItemGroup>
+      <InputSharedLibraryPaths Include="$(InputSharedAssemblyPath)">
+        <InputSharedLibraryName>$(InputSharedLibraryName)</InputSharedLibraryName>
+      </InputSharedLibraryPaths>
+    </ItemGroup>
+
+    <ItemGroup>
+      <!-- DirectInputSharedLibraryNames is the filtered list of directly specified input shared libraries -->
+      <!--   (excluding transitively dependent shared libraries); has Dependencies property -->
+      <DirectInputSharedLibraryNames Include="%(InSharedLibraryNames.Identity)" Condition="!%(InSharedLibraryNames.IsTransitive)">
+        <Dependencies>%(InSharedLibraryNames.Dependencies)</Dependencies>
+      </DirectInputSharedLibraryNames>
+
+      <!-- DirectInputSharedInteropAssemblyNames is the filtered list of interop assemblies in directly specified -->
+      <!--   input shared libraries. This is used for inter-module chaining of the StartupCodeTrigger -->
+      <!--   module initialization method. -->
+      <DirectInputSharedInteropAssemblyNames Include="$(InputSharedInteropAssemblyName)"
+        Condition="'$(McgMultiFile)' == 'true' and !%(InSharedLibraryNames.IsTransitive)"/>
+    </ItemGroup>
+
+    <!-- InputSharedAssemblyNames. Has Path/Library property -->
+    <ItemGroup>
+      <InputSharedAssemblyNames Include="%(InSharedAssemblyNames.Identity)">
+        <InputSharedAssemblyPath>$(InputSharedAssemblyPath)</InputSharedAssemblyPath>
+        <InputSharedLibraryName>$(InputSharedLibraryName)</InputSharedLibraryName>
+      </InputSharedAssemblyNames>
+    </ItemGroup>
+
+    <!-- InputSharedAssemblyPaths. Has Library property  -->
+    <ItemGroup>
+      <InputSharedAssemblyPaths Include="$(InputSharedAssemblyPath)">
+        <InputSharedLibraryName>$(InputSharedLibraryName)</InputSharedLibraryName>
+      </InputSharedAssemblyPaths>
+    </ItemGroup>
+
+    <!-- InputSharedInteropAssemblyNames. Has Path/Libary property -->
+    <ItemGroup Condition="'$(McgMultiFile)' == 'true'">
+      <InputSharedInteropAssemblyNames
+        Include="$(InputSharedInteropAssemblyName)">
+        <InputSharedAssemblyPath>$(InputSharedAssemblyPath)</InputSharedAssemblyPath>
+        <InputSharedLibraryName>$(InputSharedLibraryName)</InputSharedLibraryName>
+      </InputSharedInteropAssemblyNames>
+    </ItemGroup>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Set OutputSharedAssemblyNames/DefinitionOutputSharedAssemblyNames                                                         -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="SetForBuildSharedAssemblies"
+          Condition="'$(BuildSharedAssemblies)' == 'true'">
+
+    <!-- DefinitionOutputSharedAssemblyNames
+         The list of assembly names which define the shared library to be built - this is the input. -->
+    <ReadLinesFromFile
+      File="$(DefinitionOutputSharedAssemblyListPath)">
+      <Output TaskParameter="Lines" ItemName="DefinitionOutputSharedAssemblyNames"/>
+    </ReadLinesFromFile>
+
+    <!-- OutputSharedAssemblyNames
+         The list of assembly names which are shared and consist the output of the shared library build. 
+         This is the DefinitionOutputSharedAssemblyNames plus toolchain generated assemblies (for example interop). -->
+    <ItemGroup>
+      <OutputSharedAssemblyNames Include="%(DefinitionOutputSharedAssemblyNames.Identity)"/>
+
+      <!-- Add the generated shared interop assembly, which must be part of the shared assemblies in the output. -->
+      <OutputSharedAssemblyNames Include="$(OutputSharedInteropAssemblyName)"/>
+    </ItemGroup>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Resolve the closure of references in the initial assembly including facades                                             -->
+  <!-- ####################################################################################################################### -->
+  <PropertyGroup>
+    <ResolveInitialReferencesDependsOn>PreResolveTransforms</ResolveInitialReferencesDependsOn>
+  </PropertyGroup>  
+  <Target Name="ResolveInitialReferences"
+        DependsOnTargets="$(ResolveInitialReferencesDependsOn);SetForSharedInputs;SetForBuildSharedAssemblies">
+
+    <ItemGroup>
+      <InputSharedInteropAssemblyNames
+          Include="$(SharedInteropAssemblyNameForNonSharedBuilds)"
+          Condition="'$(UseSharedAssemblies)' != 'true' and '$(McgMultiFile)' == 'true'" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(UseSharedAssemblies)' == 'true'">
+      <ReferenceILPath>@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyAnalysisILTocFolderName)\')</ReferenceILPath>
+      <ReferenceILExt>iltoc</ReferenceILExt>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ILSearchPath Condition="'$(UseSharedAssemblies)'!='true'" Include="$(IntermediateTransformedCoreLibPath)" />
+      <ILSearchPath Include="$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)" />
+      <ILSearchPath Condition="'$(UseSharedAssemblies)'=='true'" Include="$(ReferenceILPath)" />
+      <ILSearchPath Include="$(FrameworkPrivatePath)" />
+      <ILSearchPath Include="$(FrameworkILPath)" />
+      <ILSearchPath Condition="'$(InputPath)' != ''" Include="$(InputPath)\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InitialAssemblyClosureRootNames Include="System.Private.Interop.$(ReferenceILExt)" />
+      <InitialAssemblyClosureRootNames Include="System.ObjectModel.$(ReferenceILExt)" />
+      <InitialAssemblyClosureRootNames Condition="'$(EnableWinRT)'=='true'" Include="System.Private.DeveloperExperience.AppX.dll" />
+      <InitialAssemblyClosureRootNames Condition="'$(AllowConsoleSupport)' == 'true' And '$(ShouldRunInAppx)' != 'true'" Include="System.Private.DeveloperExperience.Console.dll" />
+      <InitialAssemblyClosureRootNames Condition="'$(EnableWinRT)'=='true' and '$(BuildSharedAssemblies)' != 'true'" Include="System.Private.WinRTInterop.CoreLib.dll" />
+      <InitialAssemblyClosureRootNames Include="System.Private.Reflection.Execution.$(ReferenceILExt)" />
+      <InitialAssemblyClosureRootNames Include="System.Diagnostics.Tools.dll" /> <!-- GeneratedCodeAttribute is needed by MCG -->
+      <InitialAssemblyClosureRootNames Include="System.AppContext.dll" /> <!-- System.AppContext needs to be in the InitialAssemblyClosureRootNames because it contains the well-known type System.AppContext -->
+      <!-- Need by interop projection - the toolchain doesn't discover the dependency due to -->
+      <!-- assembly closure task not aware of projections                                    -->
+      <InitialAssemblyClosureRootNames Condition="'$(BuildSharedAssemblies)' != 'true'" Include="System.Numerics.Vectors.dll" />
+      <InitialAssemblyClosureRootNames Condition="'$(EnableWinRT)'=='true' and '$(BuildSharedAssemblies)' != 'true'" Include="System.Runtime.WindowsRuntime.dll" />
+      <InitialAssemblyClosureRootNames Condition="'$(EnableWinRT)'=='true' and '$(BuildSharedAssemblies)' != 'true'" Include="System.Runtime.WindowsRuntime.UI.Xaml.dll" />
+
+      <InitialAssemblyClosureRootNames Include="%(DefinitionOutputSharedAssemblyNames.Identity).dll"
+        Condition="'$(BuildSharedAssemblies)' == 'true' and '%(DefinitionOutputSharedAssemblyNames.Identity)' != '$(FixedCoreAssemblyName)' and '%(DefinitionOutputSharedAssemblyNames.Identity)' != '$(SystemRuntimeImplementationAssemblyName)'" />
+    </ItemGroup>
+
+    <!-- CompatQuirks is only needed for console apps and when not building shareable assemblies -->
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' != 'true' and '$(ShouldRunInAppx)' != 'true'">
+      <InitialAssemblyClosureRootNames Include="System.Private.CompatQuirks.dll" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <!-- The ordering of these items is important. In particular, if an app package includes a patched
+           Sytem.Private.* assembly, we want to pick it up from $(FrameworkILPath) instead of $(FrameworkPrivatePath). -->
+      <InitialAssemblyClosureRootSearchPaths Include="$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)" />
+      <InitialAssemblyClosureRootSearchPaths Include="$(ReferenceILPath)" />
+      <InitialAssemblyClosureRootSearchPaths Include="$(FrameworkILPath)" />
+      <InitialAssemblyClosureRootSearchPaths Include="$(FrameworkPrivatePath)" />
+    </ItemGroup>
+
+    <ResolveFilePathTask InputFileNames="@(InitialAssemblyClosureRootNames)" DirectorySearchList="@(InitialAssemblyClosureRootSearchPaths)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="InitialAssemblyClosureRoots" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedInitialAssemblyClosureRoots" />
+    </ResolveFilePathTask>
+
+    <IlcErrorTask
+        Condition="'@(UnresolvedInitialAssemblyClosureRoots)' != ''"
+        ResourceName="Error_UnresolvedInitialClosureRoots"
+        Parameters="@(UnresolvedInitialAssemblyClosureRoots, ', ');@(InitialAssemblyClosureRootSearchPaths, ', ')" />
+
+    <ItemGroup>
+      <!-- The PreMergeILTransform directory must come before the ILSearch path -->
+      <InitialAssemblyClosureLibPaths Include="$(IntermediatePreMergeILTransformedPath)" />
+      <InitialAssemblyClosureLibPaths Include="$(IntermediateTransformedSystemRuntimeWindowsRuntimePath)" />
+      <InitialAssemblyClosureLibPaths Include="@(ILSearchPath);$(FrameworkFacadesPath)" />
+      <InitialAssemblyClosureLibPaths Include="$(TargetPlatformSdkMetadataLocation)" />
+      <InitialAssemblyClosureLibPaths Include="@(ExternalReferencePaths)" />
+      
+      <!-- Outputs of ResolveFilePathTask -->
+      <InitialResolvedFilePaths />
+
+      <InitialAssemblyClosureRoots Include="@(IntermediatePreMergeILTransformedExeTarget);" />
+      <InitialAssemblyClosureRoots Include="@(ManagedWinMDs)" />
+      <InitialAssemblyClosureRoots Include="@(NativeWinMDs)" />
+      <InitialAssemblyClosureRoots Include="@(InputSharedInteropAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyAnalysisILTocFolderName)\%(Identity).$(ReferenceILExt)')"
+          Condition="'$(UseSharedAssemblies)' == 'true' and '$(McgMultiFile)' == 'true'" />
+    </ItemGroup>
+
+    <!-- Managed Dlls may either be in the original app directory or have gone through
+    PreMerge transforms, so do a resolution to find out which one happened -->
+    <ResolveFilePathTask InputFileNames="@(ManagedDlls->'%(filename)%(extension)')" DirectorySearchList="@(InitialAssemblyClosureLibPaths)">
+      <Output TaskParameter="ResolvedFilePaths" ItemName="ResolvedManagedDllFilePaths" />
+      <Output TaskParameter="UnresolvedFiles" ItemName="UnresolvedManagedDllFiles" />
+    </ResolveFilePathTask>
+
+    <ItemGroup Condition="'@(UnresolvedManagedDllFiles)'!=''">
+      <UnresolvedManagedDllFilesErrorParameters Include="@(UnresolvedManagedDllFiles, ';')" />
+      <UnresolvedManagedDllFilesErrorParameters Include="@(InitialAssemblyClosureLibPaths, ';')" />
+    </ItemGroup>
+    <IlcErrorTask Condition="'@(UnresolvedManagedDllFilesErrorParameters)'!=''" ResourceName="Error_UnresolvedManagedDllFiles" Parameters="@(UnresolvedManagedDllFilesErrorParameters)" />
+
+    <ItemGroup>
+      <InitialAssemblyClosureRoots Include="@(ResolvedManagedDllFilePaths)" />
+    </ItemGroup>
+
+    <Message Text="Running AssemblyClosureTask in ResolveInitialReferences (1)" />
+    <AssemblyClosureTask
+      RootAssemblies="@(InitialAssemblyClosureRoots)"
+      FrameworkAssemblies="@(PreferredFrameworkAssemblies)"
+      LibPaths="@(InitialAssemblyClosureLibPaths)"
+      IgnoreFacades="false"
+      IgnoreWinRtReferences="!$(EnableWinRT)"
+      IncludeWinRtReferences="$(EnableWinRT)">
+      <Output TaskParameter="DependencyClosure" ItemName="InitialResolvedFilePaths" />
+    </AssemblyClosureTask>
+
+    <!-- The System.Text.Encoding.CodePages library must be in the InitialAssemblyClosureRoots because it contains the
+    well-known type System.Text.CodePagesEncodingProvider. We first check if the application explicitly references the
+    contract to determine if analysis is required to figure out if non-standard encoding resources need to be extracted
+    from the library. Then, we add the library to the closure roots if it is not already there and recalculate the
+    closure. -->
+    <PropertyGroup>
+      <ExplicitlyRequiresNonStandardEncodings Condition="'%(InitialResolvedFilePaths.Filename)' == 'System.Text.Encoding.CodePages'">true</ExplicitlyRequiresNonStandardEncodings>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <InitialAssemblyClosureRoots Condition="'$(ExplicitlyRequiresNonStandardEncodings)' != 'true'" Include="$(FrameworkILPath)System.Text.Encoding.CodePages.dll" />
+    </ItemGroup>
+
+    <Message Text="Running AssemblyClosureTask in ResolveInitialReferences (2)" />
+    <AssemblyClosureTask
+      Condition="'$(ExplicitlyRequiresNonStandardEncodings)' != 'true'"
+      RootAssemblies="@(InitialAssemblyClosureRoots)"
+      FrameworkAssemblies="@(PreferredFrameworkAssemblies)"
+      LibPaths="@(InitialAssemblyClosureLibPaths)"
+      IgnoreFacades="false"
+      IgnoreWinRtReferences="!$(EnableWinRT)"
+      IncludeWinRtReferences="$(EnableWinRT)">
+      <Output TaskParameter="DependencyClosure" ItemName="InitialResolvedFilePaths" />
+    </AssemblyClosureTask>
+
+    <!-- The AssemblyClosureTask doesn't know it, but MCG will introduce dependencies on some assemblies
+    that use WinRT interop code, so they and their dependency closures need to be processed as well. -->
+
+    <!-- Some of the roots may exist in PreMergeILTransformed folder as well, so let's try to resolve them there -->
+    <ItemGroup>
+      <ResolvedAssemblyClosureRoots Include="%(InitialAssemblyClosureRoots.Identity)" 
+                                    Condition="!Exists('$(IntermediatePreMergeILTransformedPath)%(InitialAssemblyClosureRoots.Filename)%(InitialAssemblyClosureRoots.Extension)')" />
+      <ResolvedAssemblyClosureRoots Include="$(IntermediatePreMergeILTransformedPath)%(InitialAssemblyClosureRoots.Filename)%(InitialAssemblyClosureRoots.Extension)" 
+                                    Condition="Exists('$(IntermediatePreMergeILTransformedPath)%(InitialAssemblyClosureRoots.Filename)%(InitialAssemblyClosureRoots.Extension)')" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <InitialResolvedFilePathsWithEverything Include="@(InitialResolvedFilePaths)" />
+      <InitialResolvedFilePathsWithEverything Include="@(ResolvedAssemblyClosureRoots)" />
+      <!-- We need to have a reference to mscorlib here because mscorlib.dll needs to be looked at during the analysis phase where we decide which types are needed.
+           I am not adding this to the 'InitialAssemblyClosureRootNames' as doing that means that all the assemblies reference by the mscorlib facade will be rooted
+           which leads to a large increase in size for the app. 
+      -->
+      <InitialResolvedFilePathsWithEverything Include="$(FrameworkFacadesPath)mscorlib.dll" />
+    </ItemGroup>
+    <RemoveDuplicates Inputs="@(InitialResolvedFilePathsWithEverything)">
+      <Output TaskParameter="Filtered" ItemName="CompleteInitialResolvedFilePaths" />
+    </RemoveDuplicates>
+  </Target>
+
+
+  <!-- #################################### -->
+  <!-- Generate Interop code -->
+  <!-- #################################### -->
+  <PropertyGroup>
+    <McgWinRTInteropLibPath>$(McgWinRTInteropLibPath)</McgWinRTInteropLibPath>
+
+    <LibArch>$(TargetBuildArchitecture)</LibArch>
+
+    <!-- TargetBuildArchitecture is x86/amd64/arm -->
+    <!-- Windows SDK is x86/x64/arm               -->
+    <!-- XBOX enlistment is i386/amd64/arm        -->
+    <LibArch Condition="'$(TargetBuildArchitecture)'=='amd64' and !Exists('$(TargetPlatformSdkLibPath)\amd64')">x64</LibArch>
+    <LibArch Condition="'$(TargetBuildArchitecture)'=='x86' and !Exists('$(TargetPlatformSdkLibPath)\x86')">i386</LibArch>
+
+    <WindowsSDKLibPath>$(TargetPlatformSdkLibPath)\$(LibArch)</WindowsSDKLibPath>
+    <McgWinRTInteropLibPath>$(WindowsSDKLibPath);$(McgWinRTInteropLibPath)</McgWinRTInteropLibPath>
+    
+    <!-- WindowsApp.lib should have all APIs available for a UAP app, any API which is allowed for use in a UAP app missing from WindowsApp.lib is a bug-->
+    <!-- TextILC use WindowsApp_downlevel.lib for downlevel support while ProductILC use WindowsApp.lib-->
+    <HasWindowsAppLib Condition="Exists('$(WindowsSDKLibPath)\WindowsApp.lib')">true</HasWindowsAppLib>
+    <HasWindowsAppLibDownLevel Condition="Exists('$(WindowsSDKLibPath)\WindowsApp_downlevel.lib')">true</HasWindowsAppLibDownLevel>
+    <HasMinCoreLib Condition="Exists('$(WindowsSDKLibPath)\mincore.lib')">true</HasMinCoreLib>
+    <McgWinRTInteropImportLibs Condition="'$(HasWindowsAppLib)'=='true'">WindowsApp.lib;$(McgWinRTInteropImportLibs)</McgWinRTInteropImportLibs>
+    <McgWinRTInteropImportLibs Condition="'$(HasWindowsAppLib)'!='true' and '$(HasWindowsAppLibDownLevel)'=='true'">WindowsApp_downlevel.lib;$(McgWinRTInteropImportLibs)</McgWinRTInteropImportLibs>
+    
+    <!--WindowApp_downlevel.lib resolves some APIs to kernel32 , which obviously won't work on phone.We will 
+        use mincore.lib when building shared assemblies till windows fix the bug
+    -->
+    <McgWinRTInteropImportLibs Condition="'$(BuildSharedAssemblies)'=='true' and '$(HasMinCoreLib)'=='true'">mincore.lib</McgWinRTInteropImportLibs>
+    
+    <McgWinRTInteropClassName Condition="'$(McgWinRTInteropClassName)'==''">McgInterop</McgWinRTInteropClassName>
+    <McgOutputDirectory Condition="'$(McgOutputDirectory)'==''">$(IntermediateOutputPath)</McgOutputDirectory>
+  </PropertyGroup>
+
+  <PropertyGroup>
+      <McgWinRTInteropArch>$(TargetBuildArchitecture)</McgWinRTInteropArch>
+      <McgWinRTInteropArch Condition="'$(McgWinRTInteropArch)'=='amd64'">x64</McgWinRTInteropArch>
+  </PropertyGroup>
+  
+  <ItemGroup>
+      <_McgWinRTInteropDefines Include="$(McgWinRTInteropDefines)" />
+      <_McgWinRTInteropLibPath Include="$(McgWinRTInteropLibPath)" />
+  </ItemGroup>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Emit line-oriented list of input shared libraries directly used in the current build -->
+  <!-- The core SharedLibrary is specific in not having any dependencies. -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="EmitDependentLibraryListFile"
+    Condition="'$(BuildSharedAssemblies)' == 'true' and '$(OutSharedLibraryName)' != '$(CoreSharedLibraryName)'">
+
+    <PropertyGroup>
+      <OutputDependentLibraryListPath>$(IntermediateOutputPath)$(DependentLibraryListFileName)</OutputDependentLibraryListPath>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(OutputDependentLibraryListPath)" Lines="@(DirectInputSharedLibraryNames)" Overwrite="true"/>
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Copy native executable to package.                                                                                      -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="CopyNativeExecutablesToOutput" 
+    DependsOnTargets="SetMainTargetPaths;MDILBind;EmitDependentLibraryListFile">
+    <ItemGroup>
+      <SharedFrameworkReswFiles Include="$(IntermediateResWPath)*.resw" Condition="'$(BuildSharedAssemblies)' == 'true'"/>
+    </ItemGroup>
+
+    <PropertyGroup>
+        <ILCNativeOutputSubfolder Condition="'$(BuildSharedAssemblies)' == 'true'">$(SharedAssemblyNativeFolderName)</ILCNativeOutputSubfolder>
+    </PropertyGroup>
+
+    <AddToNativePackageTask
+        Condition="'%(IntermediateNativeAppDll.Identity)' != '' and '%(IntermediateNativeAppDll.Exclude)' != 'true'"
+        InputFile="%(IntermediateNativeAppDll.Identity)"
+        OutputSubdirectory="$(ILCNativeOutputSubfolder)" />
+
+    <!-- Emit R2R launcher into native outputs in ReadyToRun mode -->
+    <AddToNativePackageTask Condition="'$(InternalFeatureSwitch_R2R)' == 'true'"
+        InputFile="$(InSharedAssemblyPath)\r2r-$(TargetBuildType)\R2RLauncher.exe"
+        OutputSubdirectory="$(ILCNativeOutputSubfolder)"
+        OutputFileName="$(MainBinaryName).exe" />
+
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' != 'true' and '$(AllowAppLocalMrt)' == 'true'" InputFile="$(AppLocalMrt100Path)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' != 'true' and '$(AllowAppLocalMrt)' == 'true'" InputFile="$(AppLocalMrt100AppPath)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(OutputSharedAssemblyListPath)"
+        OutputSubdirectory="$(SharedAssemblyFolderPerBuildMode)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true' and '$(OutSharedLibraryName)' != '$(CoreSharedLibraryName)'"
+        InputFile="$(OutputDependentLibraryListPath)"
+        OutputSubdirectory="$(SharedAssemblyFolderPerBuildMode)" />
+
+    <!-- Shared library build only: transformed implementation *.ildll, *.ilpdb go to .\ILTransformed -->
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(ILTransformedIntermediatePath)%(OutputSharedAssemblyNames.Identity).ildll"
+        OutputSubdirectory="$(SharedAssemblyILTransformedFolderName)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(ILTransformedIntermediatePath)%(OutputSharedAssemblyNames.Identity).ilpdb"
+        OutputSubdirectory="$(SharedAssemblyILTransformedFolderName)" />
+
+    <!-- Shared library build only: analysis contract *.iltoc, *.iltocpdb go to .\AnalysisILToc -->
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(AnalysisILTocIntermediatePath)%(OutputSharedAssemblyNames.Identity).iltoc"
+        OutputSubdirectory="$(SharedAssemblyAnalysisILTocFolderName)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(AnalysisILTocIntermediatePath)%(OutputSharedAssemblyNames.Identity).iltocpdb"
+        OutputSubdirectory="$(SharedAssemblyAnalysisILTocFolderName)" />
+
+    <!-- Shared library build only: transformed contract *.iltoc, *.iltocpdb go to .\ILToc -->
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(ILTocIntermediatePath)%(OutputSharedAssemblyNames.Identity).iltoc"
+        OutputSubdirectory="$(SharedAssemblyILTocFolderName)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(ILTocIntermediatePath)%(OutputSharedAssemblyNames.Identity).iltocpdb"
+        OutputSubdirectory="$(SharedAssemblyILTocFolderName)" />
+
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(TocIntermediatePath)%(OutputSharedAssemblyNames.Identity).toc"
+        OutputSubdirectory="$(SharedAssemblyTocFolderName)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="%(MdilFiles.Identity)"
+        OutputSubdirectory="$(SharedAssemblyMDILFolderName)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(MDILIntermediatePath)%(MdilFiles.FileName).mdilpdb"
+        OutputSubdirectory="$(SharedAssemblyMDILFolderName)" />
+    <AddToNativePackageTask Condition="'$(Pgi)'=='true' And '$(BuildSharedAssemblies)' != 'true'"
+        InputFile="$(MDILIntermediatePath)$(MainBinaryName).pgd"
+        OutputFileName="$(ILCNativeOutputSubfolder)$(MainBinaryName).pgd"/>
+    <AddToNativePackageTask Condition="'$(Pgi)'=='true' And '$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(MDILIntermediatePath)$(MainBinaryName).pgd"
+        OutputFileName="$(ILCNativeOutputSubfolder)\$(MainBinaryName).pgd"/>
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(IntermediateOutputPath)\$(OutSharedLibraryName).$(ILTocFileName)"
+        OutputSubdirectory="$(SharedAssemblyFolderPerBuildMode)" />
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)' == 'true'"
+        InputFile="$(ILMergeInfoFilename)"
+        OutputFileName="$(SharedAssemblyFolderPerBuildMode)\$(SharedAssemblyILMergeInfoFileName)" />
+
+    <!-- Shared library build only: resources for shared assemblies go to .\ResW -->
+    <AddToNativePackageTask Condition="'$(BuildSharedAssemblies)'=='true' and '@(SharedFrameworkReswFiles)' != ''"
+                            InputFile="%(SharedFrameworkReswFiles.Identity)"
+                            OutputSubdirectory="$(SharedAssemblyResWFolderName)"/>
+
+    <ItemGroup Condition="'$(BuildSharedAssemblies)' != 'true' and '$(UseSharedAssemblies)' == 'true'">
+        <InputSharedLibrariesToCopy 
+            Condition="'$(MergeSharedAssemblies)' != 'true'"
+            Include="@(InputSharedAssemblyNames->'%(InputSharedAssemblyPath)\$(SharedAssemblyNativeFolderName)\%(Identity).dll')" />
+        <InputSharedLibrariesToCopy
+            Condition="'$(MergeSharedAssemblies)' == 'true'"
+            Include="@(InputSharedAssemblyPaths->'%(Identity)\$(SharedAssemblyNativeFolderName)\%(InputSharedLibraryName).dll')" />
+    </ItemGroup>
+
+    <!-- In shareable consumption mode, copy all prebuilt shareable assemblies to the output native package -->
+    <AddToNativePackageTask Condition="'$(UseFrameworkPackage)' != 'true' and '@(InputSharedLibrariesToCopy)' != ''"
+        InputFile="%(InputSharedLibrariesToCopy.Identity)" />
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Copy extracted embedded resources (if any) to a directory named _Resources under the native app package.               -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="CopyExtractedResourcesToOutput" Condition="Exists('$(IntermediateResourcesPath)')">
+
+     <ItemGroup>
+       <_ExtractedResourceFile Include="$(IntermediateResourcesPath)*" />
+     </ItemGroup>
+
+     <PropertyGroup>
+       <_ExtractedResourceOutputFolder>_Resources</_ExtractedResourceOutputFolder>
+       <_ExtractedResourceOutputFolder Condition="'$(BuildSharedAssemblies)' == 'true'">$(SharedAssemblyFolderPerBuildMode)\$(_ExtractedResourceOutputFolder)</_ExtractedResourceOutputFolder>
+     </PropertyGroup>
+
+     <AddToNativePackageTask InputFile="%(_ExtractedResourceFile.FullPath)" OutputSubdirectory="$(_ExtractedResourceOutputFolder)" />
+  </Target>
+
+  <!-- ####################################################################################################################### -->
+  <!-- Transforms AppxManifest.xml (if present) and drops an app-local CRT if required                                         -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="TransformAppxManifestAndAddCrt" Condition="$(ShouldRunInAppx)">
+    <PropertyGroup>
+      <AppInteropIsNotMerged>false</AppInteropIsNotMerged>
+      <AppInteropIsNotMerged Condition="'$(MultiFile)' == 'true' And '$(MergeNonSharedAssemblies)' != 'true'">true</AppInteropIsNotMerged>
+      <AllowWin8AdapterFiles>true</AllowWin8AdapterFiles>
+    </PropertyGroup>
+    <TransformAppxManifestTask
+      InputFile="$(InputAppxManifest)"
+      OutputFile="$(IntermediateAppxManifest)"
+      ManifestArchitecture="$(PlatformTarget)"
+      MultiFile="$(AppInteropIsNotMerged)"
+      AssemblyName="$(AssemblyName)"
+      UsingDebugAppLocalRuntime="$(UsingDebugAppLocalRuntime)"
+      AllowAppLocalCrt="$(AllowAppLocalCrt)"
+      FrameworkDependencies="@(FrameworkDependency)"
+      >
+
+
+      <Output TaskParameter="CopyCrtIntoApp" PropertyName="CopyCrtIntoApp" />
+
+    </TransformAppxManifestTask>
+
+    <PropertyGroup>
+      <AddCrt>false</AddCrt>
+      <AddCrt Condition="'$(DeferToInputCrt)'!='true' and '$(CopyCrtIntoApp)'=='true'">true</AddCrt>
+      <AddWin8Adapters>false</AddWin8Adapters>
+      <AddWin8Adapters Condition="'$(DeferToInputCrt)'!='true' and '$(CopyCrtIntoApp)'=='true' and '$(AllowWin8AdapterFiles)'=='true'">true</AddWin8Adapters>
+    </PropertyGroup>
+
+    <AddToNativePackageTask                                InputFile="$(IntermediateAppxManifest)" />
+    <AddToNativePackageTask Condition="$(AddCrt)"          InputFile="$(AppLocalCrtPath)\vcruntime140_app.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\ucrtbase.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\api-ms-win-crt-convert-l1-1-0.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\api-ms-win-crt-heap-l1-1-0.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\api-ms-win-crt-math-l1-1-0.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\api-ms-win-crt-runtime-l1-1-0.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\api-ms-win-crt-stdio-l1-1-0.dll" />
+    <AddToNativePackageTask Condition="$(AddWin8Adapters)" InputFile="$(AppLocalCrtPath)\api-ms-win-crt-string-l1-1-0.dll" />
+  </Target>
+
+  <PropertyGroup>
+    <BuildDependsOn>PrintILCStartMessage;RunGatekeeper;CopyNativeExecutablesToOutput;CopyExtractedResourcesToOutput;TransformAppxManifestAndAddCrt;MergeFrameworkReswFilesWithTheAppPriFile;CopyPackageResourceFileInRetailBuild</BuildDependsOn>
+    <BuildDependsOn Condition="'$(NoNativeCodeGen)' == 'true'">$(GenerateMDILResponseFileTargetName);GenerateBuildInfo;CopyExtractedResourcesToOutput;TransformAppxManifestAndAddCrt</BuildDependsOn>
+  </PropertyGroup>
+
+  <Target Name="PrintILCStartMessage">
+    <IlcMessageTask Importance="High" ResourceName="Message_StartILC" />
+  </Target>
+  <!-- ####################################################################################################################### -->
+  <!-- It all starts here.                                                                                                     -->
+  <!-- ####################################################################################################################### -->
+  <Target Name="Build" 
+    DependsOnTargets="$(BuildDependsOn)">
+  </Target>
+
+
+</Project>

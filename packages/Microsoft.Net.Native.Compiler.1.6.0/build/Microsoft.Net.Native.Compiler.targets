@@ -1,0 +1,39 @@
+<!--
+***********************************************************************************************
+Microsoft.Net.Native.Compiler.targets
+
+WARNING:  DO NOT MODIFY this file unless you are knowledgeable about MSBuild and have
+          created a backup copy.  Incorrect changes to this file will make it
+          impossible to load or build your projects from the command-line or the IDE.
+
+Copyright (C) Microsoft Corporation. All rights reserved.
+***********************************************************************************************
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <BuildDependsOn>
+      CheckMicrosoftNetNativeCompilerCompatibility;
+      $(BuildDependsOn);
+    </BuildDependsOn>
+  </PropertyGroup>
+  <ItemGroup>
+    <AppxPackageRegistration Include="$(MSBuildThisFileDirectory)..\tools\Runtime\x86\Microsoft.NET.Native.Runtime.1.6.appx" Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(UseDotNetNativeToolchain)' == 'true'">
+      <Architecture>x86</Architecture>
+      <Version>1.6.24903.0</Version>
+      <Publisher>'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'</Publisher>
+    </AppxPackageRegistration>
+    <AppxPackageRegistration Include="$(MSBuildThisFileDirectory)..\tools\Runtime\x64\Microsoft.NET.Native.Runtime.1.6.appx" Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(UseDotNetNativeToolchain)' == 'true'">
+      <Architecture>x64</Architecture>
+      <Version>1.6.24903.0</Version>
+      <Publisher>'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'</Publisher>
+    </AppxPackageRegistration>
+    <AppxPackageRegistration Include="$(MSBuildThisFileDirectory)..\tools\Runtime\arm\Microsoft.NET.Native.Runtime.1.6.appx" Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(UseDotNetNativeToolchain)' == 'true'">
+      <Architecture>arm</Architecture>
+      <Version>1.6.24903.0</Version>
+      <Publisher>'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'</Publisher>
+    </AppxPackageRegistration>
+  </ItemGroup>
+  <Target Name="CheckMicrosoftNetNativeCompilerCompatibility">
+    <Error Text="The Microsoft.Net.Native.Compiler package, included in Microsoft.NETCore.UniversalWindowsPlatform 5.3 and later, is only supported in Visual Studio 2017 and later. You can downgrade the version of the Microsoft.NETCore.UniversalWindowsPlatorm NuGet package to 5.2.* or earlier for Visual Studio 2015." Condition="'$(VisualStudioVersion)' &lt; '15.0'" />
+  </Target>
+</Project>

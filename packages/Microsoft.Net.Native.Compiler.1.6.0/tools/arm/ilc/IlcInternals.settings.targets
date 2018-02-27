@@ -1,0 +1,108 @@
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <NoCompilerStandardLib>true</NoCompilerStandardLib>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <SaveILAfterEachTransform>false</SaveILAfterEachTransform>
+    <RoundTripILAfterEachTransform>false</RoundTripILAfterEachTransform>
+    <RunILTransformMetadataValidator>false</RunILTransformMetadataValidator>
+
+    <OutputType>exe</OutputType>
+    <OutputType Condition="'$(BuildSharedAssemblies)'=='true'">library</OutputType>
+
+    <!-- Currently need to disable warning 436 because of the duplicate public interop type -->	
+    <NoWarn>$(NoWarn);0436</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetBuildType)' == 'chk'">
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+    <DebugType>full</DebugType>
+    <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetBuildType)' == 'ret'">
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+  </PropertyGroup>
+  
+  <PropertyGroup Condition="'$(TargetBuildArchitecture)'=='amd64'">
+    <DefineConstants>$(DefineConstants);WIN64;AMD64;ALIGN_ACCESS</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetBuildArchitecture)'=='arm'">
+    <DefineConstants>$(DefineConstants);WIN32;ARM</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Setup various paths -->
+  <PropertyGroup>
+    <ClrCompressionFileName>clrcompression.dll</ClrCompressionFileName>
+    <ClrCompressionPath>$(MsBuildThisFileDirectory)lib\Runtime\$(ClrCompressionFileName)</ClrCompressionPath>
+    <InteropNativeLibPath>$(MsBuildThisFileDirectory)lib\Native\Interop.Native.lib</InteropNativeLibPath>
+    <TypeLoaderNativeLibPath>$(MsBuildThisFileDirectory)lib\Native\TypeLoader.Native.lib</TypeLoaderNativeLibPath>
+    <CoreLibNativeLibPath>$(MsBuildThisFileDirectory)lib\Native\corelib.native.lib</CoreLibNativeLibPath>
+    <InteropAssemblyName>System.Private.Interop</InteropAssemblyName>
+    <TypeLoaderAssemblyName>System.Private.TypeLoader</TypeLoaderAssemblyName>
+    <SystemRuntimePartialFacadeAssemblyName>System.Runtime</SystemRuntimePartialFacadeAssemblyName>
+    <SystemRuntimePureFacadeAssemblyName>System.Runtime</SystemRuntimePureFacadeAssemblyName>
+    <SystemRuntimeImplementationAssemblyName>System.Runtime.Implementation</SystemRuntimeImplementationAssemblyName>
+    <SystemRuntimeWindowsRuntimeAssemblyName>System.Runtime.WindowsRuntime</SystemRuntimeWindowsRuntimeAssemblyName>
+    <VMathNativeLibPath>$(MsBuildThisFileDirectory)lib\Native\vmath.lib</VMathNativeLibPath>
+
+    <!-- Name of the binary containing all shared assemblies (in case we merge them into a single binary) -->
+    <SharedAssembliesBinaryName>$(OutSharedLibraryName)</SharedAssembliesBinaryName>
+
+    <SharedAssemblyListFileName>SharedAssemblyList.txt</SharedAssemblyListFileName>
+    <OutputSharedAssemblyListPath Condition="'$(BuildSharedAssemblies)' == 'true'">$(IntermediateOutputPath)\$(SharedAssemblyListFileName)</OutputSharedAssemblyListPath>
+    <SharedAssemblyILTransformedFolderName>$(SharedAssemblyFolderPerBuildMode)\ILTransformed</SharedAssemblyILTransformedFolderName>
+    <SharedAssemblyILTocFolderName>$(SharedAssemblyFolderPerBuildMode)\ILToc</SharedAssemblyILTocFolderName>
+    <SharedAssemblyAnalysisILTocFolderName>$(SharedAssemblyFolderPerBuildMode)\AnalysisILToc</SharedAssemblyAnalysisILTocFolderName>
+    <SharedAssemblyTocFolderName>$(SharedAssemblyFolderPerBuildMode)\Toc</SharedAssemblyTocFolderName>
+    <SharedAssemblyMDILFolderName>$(SharedAssemblyFolderPerBuildMode)\MDIL</SharedAssemblyMDILFolderName>
+    <SharedAssemblyNativeFolderName>$(SharedAssemblyFolderPerBuildMode)\Native</SharedAssemblyNativeFolderName>
+    <SharedAssemblyResWFolderName>$(SharedAssemblyFolderPerBuildMode)\ResW</SharedAssemblyResWFolderName>
+    <SharedAssemblyILMergeInfoFileName>SharedAssemblyILMergeInfo.csv</SharedAssemblyILMergeInfoFileName>
+    <PgoRtPath>$(MsBuildThisFileDirectory)lib\Native\pgort.lib</PgoRtPath>
+
+    <!-- This is the name of the shared interop module generated in non-shared multifile mode with McgMultiFile turned on. -->
+    <SharedInteropAssemblyNameForNonSharedBuilds>System.Private.Interop.Generated</SharedInteropAssemblyNameForNonSharedBuilds>
+  </PropertyGroup>
+
+  <!-- Setup the intermediate paths -->
+  <PropertyGroup>
+    <ILTransformedIntermediatePath>$(IntermediateOutputPath)ILTransformed\</ILTransformedIntermediatePath>
+    <TocIntermediatePath>$(IntermediateOutputPath)Toc\</TocIntermediatePath>
+    <ILTocIntermediatePath>$(IntermediateOutputPath)ILToc\</ILTocIntermediatePath>
+    <AnalysisILTocIntermediatePath>$(IntermediateOutputPath)AnalysisILToc\</AnalysisILTocIntermediatePath>
+    <MDILIntermediatePath>$(IntermediateOutputPath)MDIL\</MDILIntermediatePath>
+    <NativeIntermediatePath>$(IntermediateOutputPath)Native\</NativeIntermediatePath>
+  </PropertyGroup>
+
+  <!-- Setup the framework asset paths -->
+  <PropertyGroup>
+    <FrameworkResourcesPath>$(MsBuildThisFileDirectory)lib\Res\</FrameworkResourcesPath>
+    <McgDependenciesPath>$(MsBuildThisFileDirectory)lib\McgDependencies\</McgDependenciesPath>
+    <PreResolveDependenciesPath>$(MsBuildThisFileDirectory)lib\PreResolveDependencies\</PreResolveDependenciesPath>
+  </PropertyGroup>
+  
+  <!-- Known serializable types -->
+  <ItemGroup>
+    <KnownSerializableNonGenericTypes Include="System.Collections.Queue"/>
+    <KnownSerializableNonGenericTypes Include="System.Collections.Stack"/>
+    <KnownSerializableNonGenericTypes Include="System.Globalization.CultureInfo"/>
+    <KnownSerializableNonGenericTypes Include="System.Version"/>
+
+    <KnownSerializableGenericTypes Include="System.Tuple`1"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`2"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`3"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`4"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`5"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`6"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`7"/>
+    <KnownSerializableGenericTypes Include="System.Tuple`8"/>
+    <KnownSerializableGenericTypes Include="System.Collections.Generic.Queue`1"/>
+    <KnownSerializableGenericTypes Include="System.Collections.Generic.Stack`1"/>
+    <KnownSerializableGenericTypes Include="System.Collections.ObjectModel.ReadOnlyCollection`1"/>
+    <KnownSerializableGenericTypes Include="System.Collections.ObjectModel.ReadOnlyCollection`2"/>
+    <KnownSerializableGenericTypes Include="System.Collections.Generic.KeyValuePair`2"/>
+  </ItemGroup>
+</Project>

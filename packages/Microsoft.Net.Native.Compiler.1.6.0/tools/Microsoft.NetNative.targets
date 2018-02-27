@@ -1,0 +1,836 @@
+<!--
+***********************************************************************************************
+Microsoft.NetNative.targets
+
+WARNING:  DO NOT MODIFY this file unless you are knowledgeable about MSBuild and have
+          created a backup copy.  Incorrect changes to this file will make it
+          impossible to load or build your projects from the command-line or the IDE.
+
+Copyright (C) Microsoft Corporation. All rights reserved.
+***********************************************************************************************
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+   <PropertyGroup Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(UseDotNetNativeToolchain)' == 'true'">
+    <_ProjectNToolchainEnabled>true</_ProjectNToolchainEnabled>
+  </PropertyGroup>
+  
+  <!-- Make sure WindowsSDK_LibraryPath is available to us so that MCG can load up the libs correctly -->
+  <Import Condition="'$(_ProjectNToolchainEnabled)' == 'true' And '$(WindowsSDK_IncludePath)' == '' And Exists('$(TargetPlatformSdkPath)\DesignTime\CommonConfiguration\Neutral\Windows.props')" 
+          Project="$(TargetPlatformSdkPath)\DesignTime\CommonConfiguration\Neutral\Windows.props" />
+  <Import Condition="'$(_ProjectNToolchainEnabled)' == 'true' And '$(WindowsSDK_IncludePath)' == '' And Exists('$(TargetPlatformSdkPath)\DesignTime\CommonConfiguration\Neutral\$(TargetPlatformIdentifier)\$(TargetPlatformVersion)\UAP.props')" 
+          Project="$(TargetPlatformSdkPath)\DesignTime\CommonConfiguration\Neutral\$(TargetPlatformIdentifier)\$(TargetPlatformVersion)\UAP.props" />
+
+  <!-- Create list of supported platforms based on installed SDKs. 
+       VS uses this list to alter UI behavior (project settings). -->
+  <PropertyGroup Condition="'$(ProjectNProfileEnabled)' == 'true'">
+    <AllowedPlatformsForProjectN Condition="Exists('$(MSBuildThisFileDirectory)\ARM\ilc')">ARM</AllowedPlatformsForProjectN>
+    <AllowedPlatformsForProjectN Condition="Exists('$(MSBuildThisFileDirectory)\x64\ilc')">$(AllowedPlatformsForProjectN),x64</AllowedPlatformsForProjectN>
+    <AllowedPlatformsForProjectN Condition="Exists('$(MSBuildThisFileDirectory)\x86\ilc')">$(AllowedPlatformsForProjectN),x86</AllowedPlatformsForProjectN>
+    <AllowedPlatformsForProjectN>$(AllowedPlatformsForProjectN.TrimStart(','))</AllowedPlatformsForProjectN>
+  </PropertyGroup>
+
+  <!-- Provides a default target platform for finding the ilc.exe version when
+       the project is configured to AnyCPU -->
+  <PropertyGroup>
+    <_PlatformTargetForIlcVersion Condition="'$(PlatformTarget)'!='AnyCPU'">$(PlatformTarget)</_PlatformTargetForIlcVersion>
+    <_PlatformTargetForIlcVersion Condition="'$(PlatformTarget)'=='AnyCPU'">x86</_PlatformTargetForIlcVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <SkipILCompilation>true</SkipILCompilation>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <!-- 
+         These flags control the behavior of which payload the ProjectN targets is going to create:
+         - Sideload payload: contains native binaries as produced by ILC
+         - Upload payload: contains IL and extended AppxManifest, which includes the package dependencies (required by Store scenario)
+
+         Sideload payload requires ILC to be invoked but upload payload doesn't. On the other hand, invoking ILC lets you 
+         create both payloads without accruing additional cost. This translates to:
+         - Invoke ILC when we're creating a sideload package (with or without an upload package) 
+         - Don't invoke ILC when we're creating only the upload payload. 
+         
+         _ProjectNAppxPayloadBuildMode==SideloadAndUploadPayloads implies the former
+         _ProjectNAppxPayloadBuildMode==UploadPayload implies the latter.
+
+         Note: BuildAppxSideloadPackageForUap and BuildAppxUploadPackageForUap are available only on Dev14 Update 1 and later. 
+         That's why we can't take a direct dependency on these two flags. So instead we define ProjectN specific flags.
+      -->
+    <_ProjectNAppxPayloadBuildMode_BuildSideLoadPackage>true</_ProjectNAppxPayloadBuildMode_BuildSideLoadPackage>
+    <_ProjectNAppxPayloadBuildMode_BuildSideLoadPackage Condition="'$(BuildAppxSideloadPackageForUap)' == 'false'">false</_ProjectNAppxPayloadBuildMode_BuildSideLoadPackage>
+
+    <_ProjectNAppxPayloadBuildMode_BuildOnlyUploadPackage>false</_ProjectNAppxPayloadBuildMode_BuildOnlyUploadPackage>
+    <_ProjectNAppxPayloadBuildMode_BuildOnlyUploadPackage Condition="'$(BuildAppxUploadPackageForUap)' == 'true' and '$(BuildAppxSideloadPackageForUap)' == 'false'">true</_ProjectNAppxPayloadBuildMode_BuildOnlyUploadPackage>
+
+    <_ProjectNAppxPayloadBuildMode Condition="'$(_ProjectNAppxPayloadBuildMode_BuildSideLoadPackage)' == 'true'">SideloadAndUploadPayloads</_ProjectNAppxPayloadBuildMode>
+    <_ProjectNAppxPayloadBuildMode Condition="'$(_ProjectNAppxPayloadBuildMode_BuildOnlyUploadPackage)' == 'true'">UploadPayload</_ProjectNAppxPayloadBuildMode>
+    <_ProjectNAppxPayloadBuildMode Condition="'$(_ProjectNAppxPayloadBuildMode)' == ''">SideloadAndUploadPayloads</_ProjectNAppxPayloadBuildMode>
+  </PropertyGroup>
+
+  <!-- Flag to turn on/off consuming shared assembly framework package. By default it's true -->
+  <PropertyGroup>
+    <UseDotNetNativeSharedAssemblyFrameworkPackage Condition="'$(UseDotNetNativeSharedAssemblyFrameworkPackage)' == ''">true</UseDotNetNativeSharedAssemblyFrameworkPackage>
+    <UniversalGenericsOptOut Condition="'$(UniversalGenericsOptOut)' == ''">false</UniversalGenericsOptOut>
+    <ShortcutGenericAnalysis Condition="'$(ShortcutGenericAnalysis)' == ''">false</ShortcutGenericAnalysis>
+  </PropertyGroup>
+  <!-- Adds a <build:Item> tag containing the version of ilc.exe in
+       the output AppxManifest if the project is using ProjectN -->
+  <PropertyGroup>
+    <_IlcVersionPath Condition="$(IlcToolPath)!=''">$(IlcToolPath)\$(_PlatformTargetForIlcVersion)\ilc\ilc.exe</_IlcVersionPath>
+    <_IlcVersionPath Condition="$(_IlcVersionPath)==''">$(MSBuildThisFileDirectory.TrimEnd('\'))\$(_PlatformTargetForIlcVersion)\ilc\ilc.exe</_IlcVersionPath>
+  </PropertyGroup>
+       
+  <ItemGroup Condition="'$(_ProjectNToolchainEnabled)'=='true'">
+    <AppxManifestMetadata Include="$(_IlcVersionPath)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(_ProjectNToolchainEnabled)'=='true'">
+    <AppxManifestMetadata Include="OptimizingToolset">
+      <Value>ilc.exe</Value>
+    </AppxManifestMetadata>
+    <AppxManifestMetadata Include="UseDotNetNativeSharedAssemblyFrameworkPackage">
+      <Value>$(UseDotNetNativeSharedAssemblyFrameworkPackage)</Value>
+    </AppxManifestMetadata>
+    <AppxManifestMetadata Include="UniversalGenericsOptOut">
+      <Value>$(UniversalGenericsOptOut)</Value>
+    </AppxManifestMetadata>
+    <AppxManifestMetadata Include="ShortcutGenericAnalysis">
+      <Value>$(ShortcutGenericAnalysis)</Value>
+    </AppxManifestMetadata>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <DotNetNativeSharedAssemblySDKMoniker>Microsoft.NET.Native.Framework.1.6, Version=1.6</DotNetNativeSharedAssemblySDKMoniker>
+    <DotNetNativeRuntimeSDKMoniker>Microsoft.NET.Native.Runtime.1.6, Version=1.6</DotNetNativeRuntimeSDKMoniker>
+    <DotNetNativeVCLibsDependencySDKMoniker>Microsoft.VCLibs, Version=14.0</DotNetNativeVCLibsDependencySDKMoniker>
+  </PropertyGroup>
+
+
+  <!-- 
+       Insert the SDK references for VCLibs and Microsoft.Net.Native.Runtime FW packages only if we have .NET Native enabled and the app contains managed code.
+       "App contains managed code" is determined by checking the presence of System.Runtime.dll in the _IlcInputPath location since this assembly is deployed only when
+       managed code exists in the app.
+       
+       Store relies on a similar logic as well.
+       
+       This ensures that we do not accidently insert the reference to Microsoft.Net.Native.Runtime package in purely native projects (e.g. C++ or JS).
+   -->
+       
+  <Target Name="AddSDKReferences" Condition="'$(_ProjectNToolchainEnabled)'=='true' and Exists('$(_IlcInputPath)System.Runtime.dll')" 
+    AfterTargets="PrepareILCInputFolder" 
+    DependsOnTargets="QueryDotNetNativeDependencySDKs">
+
+    <ItemGroup>
+      <FilteredDotNetNativeDependencySDKs Include="@(ResolvedDotNetNativeDependencySDKs)" />
+      <FilteredDotNetNativeDependencySDKs Remove="@(ResolvedDotNetNativeDependencySDKs)" Condition="'$(UseDotNetNativeSharedAssemblyFrameworkPackage)' != 'true' and '%(ResolvedDotNetNativeDependencySDKs.SDKName)' == '$(DotNetNativeSharedAssemblySDKMoniker)'" />
+      <DotNetNativeVCLibsDependencySDK Include="@(ResolvedDotNetNativeDependencySDKs)" Condition="'%(ResolvedDotNetNativeDependencySDKs.SDKName)' == '$(DotNetNativeVCLibsDependencySDKMoniker)'" />
+    </ItemGroup>
+    <GetFrameworkSdkPackages FrameworkSdkReferences="@(FilteredDotNetNativeDependencySDKs)"
+        TargetPlatformIdentifier="$(TargetPlatformIdentifier)">
+      <Output TaskParameter="FrameworkSdkPackages" ItemName="FrameworkPackageDependencies" />
+    </GetFrameworkSdkPackages>
+
+    <ItemGroup>
+      <FrameworkPackagesForTargetArchitecture Include="@(FrameworkPackageDependencies)" Condition="'%(Architecture)' == '$(_PlatformTargetForIlcVersion)'" />
+      <FrameworkDependencyIdentities Include="%(FrameworkPackagesForTargetArchitecture.FrameworkIdentity)" Condition="'%(FrameworkPackagesForTargetArchitecture.ResolvedSDKReference)' != '@(DotNetNativeVCLibsDependencySDK)'" />
+      <FrameworkDependencyIdentities Condition="'%(AppxPackageRegistration.Publisher)' != '' AND ('$(Configuration)' == '%(AppxPackageRegistration.Configuration)' OR '%(AppxPackageRegistration.Configuration)' == '')" Include="Name = %(AppxPackageRegistration.Filename), MinVersion = %(AppxPackageRegistration.Version), Publisher = %(AppxPackageRegistration.Publisher)" />
+      <FrameworkSdkPackage Include="@(FrameworkPackageDependencies)" Exclude="@(FrameworkSdkPackage)"/>
+    </ItemGroup>
+    
+
+    <PropertyGroup>
+      <_IlcFrameworkDependencies>/frameworkDependency:"@(FrameworkDependencyIdentities, '" /frameworkDependency:"')" </_IlcFrameworkDependencies>
+    </PropertyGroup>
+
+  </Target>
+
+  <Target Name="QueryDotNetNativeDependencySDKs" DependsOnTargets="ComputeIlcParameters">
+    
+    <GetInstalledSDKLocations
+           SDKDirectoryRoots="$(SDKReferenceDirectoryRoot)"
+           SDKExtensionDirectoryRoots="$(SDKExtensionDirectoryRoot)"
+           SDKRegistryRoot="$(SDKReferenceRegistryRoot)"
+           TargetPlatformVersion="$(TargetPlatformVersion)"
+           TargetPlatformIdentifier="$(TargetPlatformIdentifier)"
+           Condition="'@(InstalledSDKLocations)' == ''"
+           >
+      <Output TaskParameter="InstalledSDKs" ItemName="InstalledSDKLocations"/>
+    </GetInstalledSDKLocations>
+    
+    <ItemGroup>
+      <NETNativeSDKs Include="$(DotNetNativeSharedAssemblySDKMoniker)" />
+      <NETNativeSDKs Include="$(DotNetNativeRuntimeSDKMoniker)" />
+      <!-- This naively hopes installed packages are compatible with us, but we will
+           later insert a package dependency that has the actual required version. -->
+      <VCLibsSDK Include="$(DotNetNativeVCLibsDependencySDKMoniker)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <DotNetNativeTargetConfiguration>Retail</DotNetNativeTargetConfiguration>
+      <DotNetNativeTargetConfiguration Condition="'$(_IlcBuildType)' == 'chk'">Debug</DotNetNativeTargetConfiguration>
+      <VCLibsTargetConfiguration>Retail</VCLibsTargetConfiguration>
+    </PropertyGroup>
+    
+    <ResolveSDKReference
+      Condition="'$(UseNugetInstall)' != 'true'"
+      SDKReferences="@(NETNativeSDKs)"
+      TargetPlatformVersion="$(TargetPlatformVersion)"
+      TargetPlatformIdentifier="$(TargetPlatformIdentifier)"
+      TargetedSDKConfiguration="$(DotNetNativeTargetConfiguration)"
+      TargetedSDKArchitecture="$(TargetedSDKArchitecture)"
+      ProjectName="$(ProjectName)"
+      InstalledSDKs ="@(InstalledSDKLocations)"
+    >
+      <Output TaskParameter="ResolvedSDKReferences" ItemName="ResolvedDotNetNativeDependencySDKs"/>
+    </ResolveSDKReference>
+
+    <ResolveSDKReference
+      SDKReferences="@(VCLibsSDK)"
+      TargetPlatformVersion="$(TargetPlatformVersion)"
+      TargetPlatformIdentifier="$(TargetPlatformIdentifier)"
+      TargetedSDKConfiguration="$(VCLibsTargetConfiguration)"
+      TargetedSDKArchitecture="$(TargetedSDKArchitecture)"
+      ProjectName="$(ProjectName)"
+      InstalledSDKs ="@(InstalledSDKLocations)"
+    >
+      <Output TaskParameter="ResolvedSDKReferences" ItemName="ResolvedDotNetNativeDependencySDKs"/>
+    </ResolveSDKReference>
+
+    <ItemGroup Condition="'@(ILCSharedAssemblyArtifactsLocations )' == ''">
+      <ILCSharedAssemblySDKRoot Include="@(ResolvedDotNetNativeDependencySDKs)" Condition="'%(ResolvedDotNetNativeDependencySDKs.SDKName)' == '$(DotNetNativeSharedAssemblySDKMoniker)'"/>
+    </ItemGroup>
+    <PropertyGroup Condition="'$(UseNugetInstall)' == 'true'">
+      <_IlcSharedAssemblyRootPath Condition="'$(_PlatformTargetForIlcVersion)' == 'x86'">$(ILCSharedAssemblySDKRootX86)</_IlcSharedAssemblyRootPath>
+      <_IlcSharedAssemblyRootPath Condition="'$(_PlatformTargetForIlcVersion)' == 'x64'">$(ILCSharedAssemblySDKRootX64)</_IlcSharedAssemblyRootPath>
+      <_IlcSharedAssemblyRootPath Condition="'$(_PlatformTargetForIlcVersion)' == 'arm'">$(ILCSharedAssemblySDKRootArm)</_IlcSharedAssemblyRootPath>
+    </PropertyGroup>
+    <PropertyGroup>
+      <_IlcSharedAssemblyRootPath Condition="'$(_IlcSharedAssemblyRootPath)' == ''">@(ILCSharedAssemblySDKRoot)$(_PlatformTargetForIlcVersion)</_IlcSharedAssemblyRootPath>
+      <_IlcSharedAssemblyDefinitionFile>$(_IlcSharedAssemblyRootPath)\$(_IlcBuildType)\SharedAssemblyILMergeInfo.csv</_IlcSharedAssemblyDefinitionFile>
+    </PropertyGroup>
+
+  </Target>
+
+  <Target Name="ComputeExtensionSDKReferencePaths">
+    <ItemGroup>
+      <!-- Don't include platform.winmd otherwise it will be added to Ilc's /externalReferencePath argument and loaded
+           which will cause all sorts of problems because it is not a valid winmd file and it is not valid .NET 
+           metadata. For example types don't derived from System.Object. 
+      -->
+      <ExtensionSDKReferencePath Include="@(ReferencePath->DirectoryName())"
+                                 Condition="'%(ReferencePath.CopyLocal)' != 'true' and '%(ReferencePath.ResolvedFrom)' == 'GetSDKReferenceFiles' and '%(ReferencePath.Filename)%(ReferencePath.Extension)' != 'platform.winmd'"
+                                 KeepDuplicates="false"/>
+    </ItemGroup>
+  </Target>
+
+  <PropertyGroup>
+    <_GatekeeperPlatformTarget>$(PlatformTarget)</_GatekeeperPlatformTarget>
+    <_GatekeeperPlatformTarget Condition="!Exists('$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc')">x64</_GatekeeperPlatformTarget>
+    <_GatekeeperPlatformTarget Condition="!Exists('$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc')">x86</_GatekeeperPlatformTarget>
+    <_GatekeeperPlatformTarget Condition="!Exists('$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc')">arm</_GatekeeperPlatformTarget>
+  </PropertyGroup>
+
+  <Target Name="RunGatekeeper"
+          AfterTargets="_WireUpCoreRuntime"
+          DependsOnTargets="ComputeExtensionSDKReferencePaths;ComputeIlcParameters"
+          Condition="'$(ProjectNProfileEnabled)' == 'true' and '$(_ProjectNToolchainEnabled)'!='true' and '$(EnableGateKeeperAnalysis)' == 'true' and Exists('$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc')">
+
+    <PropertyGroup>
+      <_GatekeeperCmd>"$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc\tools\Gatekeeper.exe" @"$(_IlcIntermediatePath)gkargs.rsp"</_GatekeeperCmd>
+
+      <_TargetPlatformMetadataPath Condition="'$(_TargetPlatformMetadataPath)' == '' and Exists('@(UnionWinmdPath)')">$([System.IO.Path]::GetDirectoryName('%(UnionWinmdPath.FullPath)'))</_TargetPlatformMetadataPath>
+      <_TargetPlatformMetadataPath Condition="'$(_TargetPlatformMetadataPath)' == '' and Exists('$(TargetPlatformWinMDLocation)')">$(TargetPlatformWinMDLocation)</_TargetPlatformMetadataPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_GatekeeperLibPath Include="$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc\lib\Facades" />
+      <_GatekeeperLibPath Include="$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc\lib\IL" />
+      <_GatekeeperLibPath Include="$(MSBuildThisFileDirectory)$(_GatekeeperPlatformTarget)\ilc\lib\Private" />
+      <_GatekeeperLibPath Include="@(ExtensionSDKReferencePath)" />
+
+      <_GatekeeperWinMDPath Include="$(_TargetPlatformMetadataPath)\*.winmd" />
+    </ItemGroup>
+
+    <ConvertToAbsolutePath Paths="$(OutputPath)" >
+      <Output TaskParameter="AbsolutePaths" PropertyName="_GatekeeperInputPath" />
+    </ConvertToAbsolutePath>
+
+    <ItemGroup>
+      <_GatekeeperArguments Include="/In:&quot;$(_GatekeeperInputPath.TrimEnd('\'))&quot;" />
+      <_GatekeeperArguments Include="@(_GatekeeperLibPath -> '/Lib:&quot;%(Identity)&quot;')" />
+      <_GatekeeperArguments Condition="'@(_GatekeeperWinMDPath)' != ''" Include="@(_GatekeeperWinMDPath -> '/WinMD:&quot;%(Identity)&quot;')" />
+      <_GatekeeperArguments Condition="'$(ProjectNVSTelemetrySession)' != ''" Include="/VSTelemetrySessionSettings:$(ProjectNVSTelemetrySession)" />
+      <_GatekeeperArguments Include="/RdXmlPath:&quot;$(MSBuildThisFileDirectory)LibraryXML&quot;" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(_IlcIntermediatePath)"/>
+    <WriteLinesToFile File="$(_IlcIntermediatePath)gkargs.rsp" Lines="@(_GatekeeperArguments)" Overwrite="true" />
+
+    <Exec Command="$(_GatekeeperCmd)">
+      <Output TaskParameter="ExitCode" PropertyName="_GatekeeperExitCode" />
+    </Exec>
+  </Target>
+
+  <UsingTask TaskName="ValidateRdXmlTask" AssemblyFile="$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc\tools\Microsoft.Build.ILTasks.dll"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true' and Exists('$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc')"/>
+
+  <UsingTask TaskName="LoggerBasedExecTask" AssemblyFile="$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc\tools\Microsoft.Build.ILTasks.dll"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true' and Exists('$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc')"/>
+
+  <UsingTask TaskName="IlcErrorTask" AssemblyFile="$(MSBuildThisFileDirectory)$(_PlatformTargetForIlcVersion)\ilc\ilc.exe" />
+  <UsingTask TaskName="IlcMessageTask" AssemblyFile="$(MSBuildThisFileDirectory)$(_PlatformTargetForIlcVersion)\ilc\ilc.exe" />
+  <UsingTask TaskName="SharedAssemblyApplicabilityVerifierTask" AssemblyFile="$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc\tools\Microsoft.Build.ILTasks.dll" />
+  <UsingTask TaskName="ParseILMergeInfoTask" AssemblyFile="$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc\tools\Microsoft.Build.ILTasks.dll" />
+  <UsingTask TaskName="InjectFrameworkDependenciesTask" AssemblyFile="$(MSBuildThisFileDirectory)$(_PlatformTargetForIlcVersion)\ilc\ilc.exe" />
+  <UsingTask TaskName="JSONEscapeStringTask" AssemblyFile="$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc\tools\Microsoft.Build.ILTasks.dll" />
+  
+  <Target Name="ValidateRdXml"
+          AfterTargets="AfterGenerateAppxManifest"
+          BeforeTargets="BuildNativePackage"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true' and Exists('$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc')">
+
+    <ValidateRdXmlTask Files="@(_IlcInputRdXmlFiles)"/>
+  </Target>
+
+  <Target Name="CheckForUnsupportedScenarios"
+          AfterTargets="ValidateRdXml"
+          >
+    <!-- 
+         Optional packages, a.k.a. DLC, are not supported by .Net. Raise an error if the app that the toolchain is building
+         is an optional package AND it contains .Net components in its dependency closure
+
+         ASSUMPTION: In deciding whether an unmanaged app has a managed dependency we'll defer to the computation of 
+         whether UnionWinMD needs to be included in the PackagingOutputs or not. 
+         (See the target _AddUnionWinmd in Microsoft.AppxPackage.Targets)
+         Briefly, UnionWinMD is going to be included if any of the winmds that the app is referencing is managed. 
+         So existance of UnionWinMD is being used as an indicator to existance of managed code. 
+         This way the cost of computing managed dependency is avoided. 
+    -->          
+          
+    <ItemGroup>
+      <_UnionMetadataWinMD Include="@(PackagingOutputs)" Condition="'%(Identity)' == '$(_TargetPlatformSdkDir)UnionMetadata\Windows.winmd'" />
+    </ItemGroup>
+  
+    <PropertyGroup Condition="'$(TargetRuntime)' == 'Managed' or '@(_UnionMetadataWinMD)' != ''">
+      <_AppContainsManagedCodeInItsClosure>true</_AppContainsManagedCodeInItsClosure>
+    </PropertyGroup>
+          
+    <XmlPeek Namespaces="&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;"
+      XmlInputPath="@(FinalAppxManifest)"
+      Query="//uap3:MainPackageDependency/@Name">
+      <Output TaskParameter="Result" ItemName="MainPackageDependencyName"/>
+    </XmlPeek>
+
+    <IlcErrorTask Condition="'@(MainPackageDependencyName)' != '' and '$(_AppContainsManagedCodeInItsClosure)' == 'true'"
+      ResourceName="Error_DLCUnsupported" />
+  </Target>
+
+  <Target Name="CheckForAnyCPU">
+    <IlcErrorTask Condition="'$(PlatformTarget)' == 'AnyCPU'" ResourceName="Error_AnyCPU" />
+  </Target>
+
+  <UsingTask TaskName="ComputeManagedBinaries" AssemblyFile="$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc\ilc.exe"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true' and Exists('$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc')"/>
+  
+  <Target Name="ComputeIlcParameters"
+          DependsOnTargets="ComputeExtensionSDKReferencePaths">
+    
+    <!-- Compute the target location for ILC outputs -->
+    <PropertyGroup Condition="'$(IlcOutputPath)'==''">
+      <IlcOutputPath>$(OutputPath)ilc\</IlcOutputPath>
+    </PropertyGroup>
+    <ConvertToAbsolutePath Paths="$(IlcOutputPath)" >
+      <Output TaskParameter="AbsolutePaths" PropertyName="_IlcOutputPath" />
+    </ConvertToAbsolutePath>
+
+    <PropertyGroup Condition="'$(IlcIntermediateRootPath)'==''">
+      <IlcIntermediateRootPath>$(IntermediateOutputPath)ilc\</IlcIntermediateRootPath>
+    </PropertyGroup>
+    <ConvertToAbsolutePath Paths="$(IlcIntermediateRootPath)">
+      <Output TaskParameter="AbsolutePaths" PropertyName="_IlcIntermediateRootPath" />
+    </ConvertToAbsolutePath>
+
+    <GetSdkPropertyValue     TargetPlatformSdkRootOverride="$(TargetPlatformSdkRootOverride)"
+                             SDKIdentifier="$(SDKIdentifier)"
+                             SDKVersion="$(SDKVersion)"
+                             TargetPlatformIdentifier="$(TargetPlatformIdentifier)"
+                             TargetPlatformMinVersion="$(TargetPlatformMinVersion)"
+                             TargetPlatformVersion="$(TargetPlatformVersion)"
+                             PropertyName="WindowsSdkDir">
+            <Output TaskParameter="PropertyValue" PropertyName="_TargetPlatformSdkDir" />
+    </GetSdkPropertyValue>
+
+    <PropertyGroup>
+      <WindowsSdkPath Condition="'$(WindowsSdkPath)' == ''">$([MSBuild]::GetRegistryValueFromView('HKEY_LOCAL_MACHINE\Software\Microsoft\Microsoft SDKs\Windows\v$(TargetPlatformVersion)', InstallationFolder, null, RegistryView.Registry32, RegistryView.Default))</WindowsSdkPath>
+      <WindowsSdkPath Condition="'$(WindowsSdkPath)' == ''">$(_TargetPlatformSdkDir)</WindowsSdkPath>
+    </PropertyGroup>
+
+    <!--                         Computing full path of rc.exe                            -->
+    <!-- RcExeFullPath is set in _GetSdkToolPaths target in Microsoft.AppxPackage.targets -->
+    <PropertyGroup>
+      <_RcExeFullPath>$(RcExeFullPath)</_RcExeFullPath>
+    </PropertyGroup>
+
+    <!-- 
+         But earlier versions (i.e.: <= Dev14 Update1 ) of this targets file doesn't set RcExeFullPath. 
+         Try to find out where it is by invoking GetSdkFileFullPath task ourselves
+     --> 
+    <PropertyGroup>
+      <MSBuildExtensionsPath64Exists Condition="'$(MSBuildExtensionsPath64)' == ''">false</MSBuildExtensionsPath64Exists>
+      <MSBuildExtensionsPath64Exists Condition="'$(MSBuildExtensionsPath64)' != ''">true</MSBuildExtensionsPath64Exists>
+    </PropertyGroup>    
+    <GetSdkFileFullPath Condition="'$(_RcExeFullPath)' == ''"
+                        FileName="rc.exe"
+                        TargetPlatformSdkRootOverride="$(TargetPlatformSdkRootOverride)"
+                        SDKIdentifier="$(SDKIdentifier)"
+                        SDKVersion="$(SDKVersion)"
+                        TargetPlatformIdentifier="$(TargetPlatformIdentifier)"
+                        TargetPlatformMinVersion="$(TargetPlatformMinVersion)"
+                        TargetPlatformVersion="$(TargetPlatformVersion)"
+                        MSBuildExtensionsPath64Exists="$(MSBuildExtensionsPath64Exists)">
+      <Output TaskParameter="ActualFullFilePath" PropertyName="_RcExeFullPath" />
+      <Output TaskParameter="ActualFileArchitecture" PropertyName="_RcExeArchitecture" />
+    </GetSdkFileFullPath>
+
+    <!--                     End:Computing full path of rc.exe                            -->
+    
+    <!-- Prepare ilc arguments. -->
+    <PropertyGroup>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And '$(WindowsSDK_LibraryPath)'!=''">$(WindowsSDK_LibraryPath)</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And '$(PlatformTarget)'=='ARM' And '$(WindowsSDK_LibraryPath_arm)'!=''">$(WindowsSDK_LibraryPath_arm)\..</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And '$(PlatformTarget)'=='x86' And '$(WindowsSDK_LibraryPath_x86)'!=''">$(WindowsSDK_LibraryPath_x86)\..</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And '$(PlatformTarget)'=='x64' And '$(WindowsSDK_LibraryPath_x64)'!=''">$(WindowsSDK_LibraryPath_x64)\..</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And Exists('$(_TargetPlatformSdkDir)')">$(_TargetPlatformSdkDir.TrimEnd('\'))</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And Exists('$(TargetPlatformSdkPath)\Lib\winv6.4\um')">$(TargetPlatformSdkPath)\Lib\winv6.4\um</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'=='' And Exists('$(TargetPlatformSdkPath)\lib\$(PlatformTarget)')">$(TargetPlatformSdkPath)\lib\$(PlatformTarget)</IlcTargetPlatformSdkLibPath>
+      <IlcTargetPlatformSdkLibPath Condition="'$(IlcTargetPlatformSdkLibPath)'==''">$(TargetPlatformSdkPath)\Lib\winv6.3\um</IlcTargetPlatformSdkLibPath>
+    </PropertyGroup>
+    <ConvertToAbsolutePath Paths="$(IlcTargetPlatformSdkLibPath)">
+      <Output TaskParameter="AbsolutePaths" PropertyName="_IlcTargetPlatformSdkLibPath" />
+    </ConvertToAbsolutePath>
+
+    <PropertyGroup>
+      <_IlcBuildType Condition="'$(Language)' == 'C++' and '$(UseDebugLibraries)' == 'true'">chk</_IlcBuildType>
+      <_IlcBuildType Condition="'$(Language)' == 'C++' and '$(UseDebugLibraries)' != 'true'">ret</_IlcBuildType>
+
+      <_IlcBuildType Condition="'$(Language)' != 'C++' and '$(Optimize)' == 'true'">ret</_IlcBuildType>
+      <_IlcBuildType Condition="'$(Language)' != 'C++' and '$(Optimize)' != 'true'">chk</_IlcBuildType>
+    </PropertyGroup>
+    <PropertyGroup>
+      <_IlcExitCode />
+      <_IlcRootPath Condition="'$(IlcToolPath)'!=''">$(IlcToolPath)\$(_PlatformTargetForIlcVersion)\ilc</_IlcRootPath>
+      <_IlcRootPath Condition="'$(_IlcRootPath)'==''">$(MSBuildThisFileDirectory)$(_PlatformTargetForIlcVersion)\ilc</_IlcRootPath>
+      <_IlcExePath>$(_IlcRootPath)\ilc.exe</_IlcExePath>
+      <_IlcInputPath>$(_IlcIntermediateRootPath)in\</_IlcInputPath>
+      <_IlcIntermediatePath>$(_IlcIntermediateRootPath)intermediate\</_IlcIntermediatePath>
+      <_IlcVerbosity>normal</_IlcVerbosity>
+      <_IlcKeepIntermediates>true</_IlcKeepIntermediates>
+      <_IlcSuppressPDBWarnings>true</_IlcSuppressPDBWarnings>
+      <_IlcExternalReferencePath>/externalReferencePath:"@(ExtensionSDKReferencePath,'" /externalReferencePath:"')"</_IlcExternalReferencePath>
+    </PropertyGroup>
+    <ItemGroup>
+      <_IlcInputRdXmlFiles Include="@(AppxPackagePayload)" 
+          Condition="$([System.String]::new('%(AppxPackagePayload.FileName)%(AppxPackagePayload.Extension)').EndsWith('.rd.xml', System.StringComparison.OrdinalIgnoreCase))"/>
+      <_IlcInputXrXmlFiles Include="@(AppxPackagePayload)" 
+          Condition="$([System.String]::new('%(AppxPackagePayload.FileName)%(AppxPackagePayload.Extension)').EndsWith('.xr.xml', System.StringComparison.OrdinalIgnoreCase))"/>
+    </ItemGroup>
+  </Target>
+
+  <!-- The ILC input folder is created when .Net Native compilation is enabled, and when it isn't but we're running Gatekeeper.
+       This ensures Gatekeeper is run on the same set of inputs as if .Net Native were enabled -->
+  <Target Name="PrepareILCInputFolder"
+          AfterTargets="CheckForUnsupportedScenarios"
+          DependsOnTargets="ComputeIlcParameters;ComputeNativePackageInputsAndOutputs"
+          Condition="'$(ProjectNProfileEnabled)' == 'true' and ('$(_ProjectNToolchainEnabled)' == 'true')"
+          >
+    <!-- Deploy managed appx package layout to _IlcInputPath -->
+    <!-- We have had to disable an optimization that was previously here. We can maybe enable it in the future -->
+    <ItemGroup>
+      <_IlcInputPayload Include="@(BuildNativePackagesInputs)" KeepDuplicates="false"/>
+
+      <_IlcInputPayload Include="@(AppxPackagePayload)" KeepDuplicates="false"/>
+      <_IlcInputPayload Include="@(FinalAppxManifest)" KeepDuplicates="false">
+        <TargetPath>AppxManifest.xml</TargetPath>
+      </_IlcInputPayload>
+    </ItemGroup>
+
+    <ItemGroup>
+      <_IlcInputFolderContents Include="@(_IlcInputPayload->'$(_IlcInputPath)%(TargetPath)')" />
+    </ItemGroup>
+
+    <!-- 
+         Sanitizing ILC input folder:
+         When .net native is disabled (i.e. the default debug configuration), gatekeeper will populate this folder with CoreCLR related libraries.
+         If user switches the configuration and enables .net native, the very same folder will be used as input to ILC.
+         Then when user builds without doing a clean first, 
+            - if there happens to be a file in AppxPackagePayload that already exists in this directory it'll be overwritten. However,
+            - those files in this directory that doesn't exist in the AppxPackagePayload, such as CoreCLR specific files, will just stay. 
+         The later will cause a failure in ILC later on.
+         To prevent that we're removing any file from this directory that doesn't exist in AppxPackagePayload
+    -->
+    <ItemGroup>
+      <_ResidualFilesInIlcInputPath Include="$(_IlcInputPath)**\*" />
+      <_ResidualFilesInIlcInputPath Remove="@(_IlcInputFolderContents)" />
+    </ItemGroup>
+    <Delete Files="@(_ResidualFilesInIlcInputPath)" />
+
+
+    <!-- Find app-local Windows.winmd if it exists -->
+    <ItemGroup>
+      <AppLocalMetadataFile Include="@(_IlcInputPayload)" Condition="'%(TargetPath)' == 'WinMetadata\Windows.winmd'" />
+    </ItemGroup>
+    <PropertyGroup>
+      <AppLocalMetadataPath>%(AppLocalMetadataFile.RootDir)%(AppLocalMetadataFile.Directory)</AppLocalMetadataPath>
+    </PropertyGroup>
+
+      <Copy SourceFiles="@(_IlcInputPayload)"
+          DestinationFiles="@(_IlcInputFolderContents)"
+          SkipUnchangedFiles="$(SkipCopyUnchangedFiles)"
+          UseHardlinksIfPossible="true"
+          >
+      <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
+    </Copy>
+
+
+    <!-- If an app-local Windows.winmd was found, we want to defer to it for platform metadata -->
+    <PropertyGroup Condition="Exists('$(_IlcInputPath)WinMetadata\Windows.winmd')">
+      <_TargetPlatformMetadataPath>$(_IlcInputPath)WinMetadata</_TargetPlatformMetadataPath>  
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(_TargetPlatformMetadataPath)' == '' and Exists('@(UnionWinmdPath)')">
+      <_TargetPlatformMetadataPath>$([System.IO.Path]::GetDirectoryName('%(UnionWinmdPath.FullPath)'))</_TargetPlatformMetadataPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(_TargetPlatformMetadataPath)' == '' and Exists('$(TargetPlatformWinMDLocation)')">
+      <_TargetPlatformMetadataPath>$(TargetPlatformWinMDLocation)</_TargetPlatformMetadataPath>
+    </PropertyGroup>
+
+    <Error Condition="'$(_TargetPlatformMetadataPath)' == ''" Text="Could not find an existing platform WinMD location" />
+    
+  </Target>
+
+  <Target Name="ComputeNativePackageInputsAndOutputs"
+    DependsOnTargets="ComputeIlcParameters;_CalculateInputsForGenerateAppxPackageRecipe"
+    Condition="'$(_ProjectNToolchainEnabled)' == 'true' and Exists('$(MSBuildThisFileDirectory)$(PlatformTarget)\ilc')"
+    >
+    <!-- 
+      Inputs and outputs to ILC:
+
+        Inputs:
+          - Managed binaries (*.exe / *.dll / *.winmd)
+          - Metadata directives (*.rd.xml)
+          - Xaml roots logs (*.xr.xml)
+          - Appxmanifest.xml
+
+        Outputs:
+          - Compiled native binaries
+            - For managed apps: exename.exe, exename.dll
+            - For hybrid apps: <PackageIdGuid>.exe, <PackageIdGuid>.dll
+    -->
+    <ItemGroup>
+      <ManagedAppxPackagePayloadCandidates Include="@(AppxPackagePayload)" Condition="'%(AppxPackagePayload.Extension)' == '.exe'" />
+      <ManagedAppxPackagePayloadCandidates Include="@(AppxPackagePayload)" Condition="'%(AppxPackagePayload.Extension)' == '.dll'" />
+      <ManagedAppxPackagePayloadCandidates Include="@(AppxPackagePayload)" Condition="'%(AppxPackagePayload.Extension)' == '.winmd'" />
+    </ItemGroup>
+    <ComputeManagedBinaries InputFiles="@(ManagedAppxPackagePayloadCandidates)" AppxManifest="$(FinalAppxManifestName)" OutputPath="$(_IlcOutputPath)">
+      <Output TaskParameter="ManagedFiles" ItemName="ManagedAppxPackagePayload" />
+      <Output TaskParameter="OutputDotNetNativeFiles" ItemName="BuildNativePackageOutputs" />
+    </ComputeManagedBinaries>
+
+    <ItemGroup>
+      <!-- Runtime reflection directives affect types / metadata retained in compilation -->
+      <BuildNativePackagesInputs Include="@(_IlcInputRdXmlFiles)" />
+
+      <!-- Xaml roots are entrypoints into managed code and affect types / methods retained in compilation -->
+      <BuildNativePackagesInputs Include="@(_IlcInputXrXmlFiles)" />
+      
+      <!-- ILC modifies the appx manifest -->
+      <BuildNativePackagesInputs Include="$(FinalAppxManifestName)">
+        <TargetPath>AppxManifest.xml</TargetPath>
+      </BuildNativePackagesInputs>
+
+      <!-- Symbols -->
+      <BuildNativePackagesInputs Include="@(PdbPayload)" />
+
+      <!-- Include winmds and managed binaries -->
+      <BuildNativePackagesInputs Include="@(ManagedAppxPackagePayload)" />
+
+      <!-- Resources -->
+      <BuildNativePackagesInputs Include="@(AppxPackagePayload)" Condition="'%(AppxPackagePayload.Extension)' == '.pri'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- 
+    This target detects whether compilation of IL is required as part of BuildNativePackage.
+    If all managed input assemblies are up to date with respect to output native binaries,
+    this target will be skipped since it's up to date.  That allows ILC to run in a
+    pass-through mode that copies all the non-code artifacts through to the output folder.
+  -->
+  <Target Name="BuildNativePackageCompilationRequired"
+          AfterTargets="CheckForUnsupportedScenarios"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true'"
+          DependsOnTargets="CheckForAnyCPU;ComputeNativePackageInputsAndOutputs"
+          Inputs="@(BuildNativePackagesInputs)"
+          Outputs="@(BuildNativePackageOutputs)">
+
+    <CreateProperty Value="false">
+      <Output PropertyName="SkipILCompilation" TaskParameter="ValueSetByTask"/>
+    </CreateProperty>
+    
+  </Target>
+
+  <Target Name="CreateOnlyAppxUploadPackagePayload"
+          AfterTargets="CheckForUnsupportedScenarios"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true' and ('$(_ProjectNAppxPayloadBuildMode)' == 'UploadPayload')"
+          DependsOnTargets="CheckForAnyCPU;ComputeIlcParameters;AddSDKReferences"
+          >
+
+    <PropertyGroup>
+      <!-- Name of manifest file is predefined -->
+      <_AppxManifestXmlFileName>AppxManifest.xml</_AppxManifestXmlFileName>
+      <!-- Expected location of result manifest file where it supposed to be dropped by ILC -->
+      <_TransformedAppxManifestXmlFile>$(_IlcOutputPath)$(_AppxManifestXmlFileName)</_TransformedAppxManifestXmlFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <FrameworkDependencyList Include="%(FrameworkPackagesForTargetArchitecture.Name)">
+        <Version>%(FrameworkPackagesForTargetArchitecture.Version)</Version>
+        <Publisher>%(FrameworkPackagesForTargetArchitecture.Publisher)</Publisher>
+      </FrameworkDependencyList>
+
+    </ItemGroup>
+
+    <MakeDir Directories="$(_IlcOutputPath)" />
+
+    <InjectFrameworkDependenciesTask
+      InputFile="@(FinalAppxManifest)"
+      OutputFile="$(_TransformedAppxManifestXmlFile)"
+      FrameworkDependencies="@(FrameworkDependencyList)"
+      />
+
+    <ItemGroup>
+      <AppxUploadPackagePayload Include="@(AppxPackagePayload)" />
+      <PDBUploadPayload Include="@(_IlcInputPayload)" Condition="'%(_IlcInputPayload.Extension)' == '.pdb'" />
+      <FinalAppxUploadManifest Remove="@(FinalAppxManifest)"/>
+      <FinalAppxUploadManifest Include="$(_TransformedAppxManifestXmlFile)" />
+    </ItemGroup>
+
+  </Target>
+
+  <!-- Build native appx package. Runs after managed appx package payload is computed. -->
+  <Target Name="BuildNativePackage"
+          AfterTargets="CheckForUnsupportedScenarios;BuildNativePackageCompilationRequired"
+          Condition="'$(_ProjectNToolchainEnabled)' == 'true' and '$(_ProjectNAppxPayloadBuildMode)' == 'SideloadAndUploadPayloads'"
+          DependsOnTargets="CheckForAnyCPU;ComputeIlcParameters;PrepareILCInputFolder;VerifySharedAssemblyApplicability"
+          >
+
+    
+    <PropertyGroup>
+      <!-- Name of manifest file is predefined -->
+      <_AppxManifestXmlFileName>AppxManifest.xml</_AppxManifestXmlFileName>
+      <!-- Expected location of result manifest file where it supposed to be dropped by ILC -->
+      <_TransformedAppxManifestXmlFile>$(_IlcOutputPath)$(_AppxManifestXmlFileName)</_TransformedAppxManifestXmlFile>
+
+      <!-- ILC hardcodes resources.pri as the file name so we do the same here -->
+      <_ProjectPriFileName>resources.pri</_ProjectPriFileName>
+      <_TransformedProjectPriFullPath>$(_IlcOutputPath)$(_ProjectPriFileName)</_TransformedProjectPriFullPath>
+    </PropertyGroup>
+
+    <!-- Delete existing transformed file -->
+    <Delete Condition="'$(SkipILCompilation)' != 'true'" Files="$(_TransformedAppxManifestXmlFile)"/>
+
+    <!-- Invoke ilc. -->
+    <PropertyGroup>
+      <_IlcResponseFile>$(IntermediateOutputPath.TrimEnd('\'))\ilc.$(MSBuildProjectName).rsp</_IlcResponseFile>
+
+      <_IlcParameters                                                                                    >/in:"$(_IlcInputPath.TrimEnd('\'))"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /out:"$(_IlcOutputPath.TrimEnd('\'))"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /intermediatespath:"$(_IlcIntermediatePath.TrimEnd('\'))"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /v:$(_IlcVerbosity)</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /keepintermediates:$(_IlcKeepIntermediates)</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /buildtype:$(_IlcBuildType)</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /exename:"$(TargetFileName)"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /makepripath:"$(MakePriExeFullPath)"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /appPriProjectRoot:"$(ProjectDir.TrimEnd('\'))"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /rcpath:"$(_RcExeFullPath)"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /targetplatformsdklibpath:"$(_IlcTargetPlatformSdkLibPath)"</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /targetplatformsdkmetadatapath:"$(_TargetPlatformMetadataPath)"</_IlcParameters>
+      <_IlcParameters Condition="'$(_IlcExternalReferencePath)' != '/externalReferencePath:&quot;&quot;'">$(_IlcParameters) $(_IlcExternalReferencePath)</_IlcParameters>
+      <_IlcParameters Condition="'$(ProjectNVSTelemetrySession)' != ''"                                  >$(_IlcParameters) /VSTelemetrySessionSettings:$(ProjectNVSTelemetrySession)</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /RdXmlPath:"$(MSBuildThisFileDirectory)LibraryXML"</_IlcParameters>
+      <_IlcParameters Condition="'$(_IlcSuppressPDBWarnings)'=='true'"                                   >$(_IlcParameters) /suppressPDBWarnings:$(_IlcSuppressPDBWarnings)</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) /AllowNoManagedCode</_IlcParameters>
+      <_IlcParameters Condition="'$(AppContextSwitches)' != ''"                                          >$(_IlcParameters) /AppContextSwitches:"$(AppContextSwitches)"</_IlcParameters>
+      <_IlcParameters Condition="'$(SkipILCompilation)' == 'true'"                                       >$(_IlcParameters) /SkipILCompilation:$(SkipILCompilation)</_IlcParameters>
+      <_IlcParameters Condition="'$(NetNativeReproPath)' != ''"                                          >$(_IlcParameters) /PackRepro:"$(NetNativeReproPath.TrimEnd('\'))"</_IlcParameters>
+      <_IlcParameters Condition="'$(NetNativePdbPath)' != ''"                                            >$(_IlcParameters) /PdbPath:"$(NetNativePdbPath.TrimEnd('\'))"</_IlcParameters>
+      <_IlcParameters Condition="'$(EnableNetNativeDeveloperExperienceMode)'!=''"                        >$(_IlcParameters) /developerExperience:$(EnableNetNativeDeveloperExperienceMode)</_IlcParameters>
+      <_IlcParameters                                                                                    >$(_IlcParameters) $(_IlcFrameworkDependencies)</_IlcParameters>
+      <_IlcParameters Condition="'$(UseDotNetNativeSharedAssemblyFrameworkPackage)' == 'true'"           >$(_IlcParameters) /UseSharedAssemblies</_IlcParameters> 
+      <_IlcParameters Condition="'$(UseDotNetNativeSharedAssemblyFrameworkPackage)' == 'true'"           >$(_IlcParameters) /InSharedAssemblyPath:"$(_IlcSharedAssemblyRootPath)"</_IlcParameters>
+      <_IlcParameters Condition="'$(EnableGateKeeperAnalysis)' == 'true'"                                >$(_IlcParameters) /EnableGatekeeperAnalysis</_IlcParameters>
+      <_IlcParameters Condition="'$(UniversalGenericsOptOut)' == 'true'"                                 >$(_IlcParameters) /sharedGenericsMode StandardHeuristics</_IlcParameters>
+
+      <!-- The IlcParameters property allows for debug scenarios where overriding one of the built-in switches
+           might be desirable. It should always come last, since ILC treats command line parameters at the end
+           of its command line as having higher precedence -->
+      <_IlcParameters Condition="'$(IlcParameters)' != ''">$(_IlcParameters) $(IlcParameters)</_IlcParameters>
+      
+      <_IlcInvocationParameters>@"$(_IlcResponseFile)"</_IlcInvocationParameters>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_IlcMessageParameters Include="$(_IlcResponseFile)" />
+      <_IlcMessageParameters Include="$(_IlcParameters)" />
+    </ItemGroup>
+    <IlcMessageTask Importance="Normal" ResourceName="Message_IlcResponseFileContents" Parameters="@(_IlcMessageParameters)" />
+    <WriteLinesToFile File="$(_IlcResponseFile)" Lines="$(_IlcParameters)" Overwrite="true" />
+    <ItemGroup>
+      <FileWrites Include="$(_IlcResponseFile)" />
+    </ItemGroup>
+
+    <LoggerBasedExecTask 
+      Application="$(_IlcExePath)" 
+      Parameters="$(_IlcInvocationParameters)" 
+      MessageLog="$(_IlcIntermediateRootPath)ilclog.csv"
+      UseCommandProcessor="false" 
+      >
+      <Output TaskParameter="ExitCode" PropertyName="_IlcExitCode" />
+    </LoggerBasedExecTask>
+
+    <!--
+      This processing is only applicable for debugging with a NuGet-installed toolchain.
+      The debugger needs to know where several toolchain dll's and pdb's are in order to
+      correctly initialize the debugger for .Net Native builds. We provide that information
+      into a JSON document that is placed alongside the app pdb, which follows an agreed-upon
+      document format between the VS debugger team and the .Net Native team.
+    -->
+    <PropertyGroup>
+      <_DebuggerServicesPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\Runtime\$(PlatformTarget)'))</_DebuggerServicesPath>
+      <_SharedLibrarySymbolPath>$([System.IO.Path]::GetFullPath('$(_IlcSharedAssemblyRootPath)\$(_IlcBuildType)\Native\SharedLibrary.pdb'))</_SharedLibrarySymbolPath>
+    </PropertyGroup>
+    <JSONEscapeStringTask InputString="$(_DebuggerServicesPath)">
+      <Output TaskParameter="EscapedString" PropertyName="_JSONEncodedDebuggerServicesPath"/>
+    </JSONEscapeStringTask>
+    <JSONEscapeStringTask InputString="$(_SharedLibrarySymbolPath)">
+      <Output TaskParameter="EscapedString" PropertyName="_JSONEncodedSharedLibrarySymbolPath"/>
+    </JSONEscapeStringTask>
+
+    <PropertyGroup>
+      <_MSBuildUnescapedDebuggerServicesPath>$([MSBuild]::Unescape("$(_JSONEncodedDebuggerServicesPath)"))</_MSBuildUnescapedDebuggerServicesPath>
+      <_MSBuildUnescapedSharedLibrarySymbolPath>$([MSBuild]::Unescape("$(_JSONEncodedSharedLibrarySymbolPath)"))</_MSBuildUnescapedSharedLibrarySymbolPath>
+      <_DebuggingText>{ "DebuggerServicesPath": "$(_MSBuildUnescapedDebuggerServicesPath)", "SharedLibrarySymbolPath":"$(_MSBuildUnescapedSharedLibrarySymbolPath)" }</_DebuggingText>
+    </PropertyGroup>
+    <WriteLinesToFile Condition="'$(UseNugetInstall)' == 'true'" File="$(_IlcIntermediatePath.TrimEnd('\'))\Native\DotNetNative.debugger-services-def.json" Lines="$(_DebuggingText)" Overwrite="true" />
+    <WriteLinesToFile Condition="'$(UseNugetInstall)' == 'true'" File="$(_IlcOutputPath)\DotNetNative.debugger-services-def.json" Lines="$(_DebuggingText)" Overwrite="true" />
+
+    <!-- Preserve generated C# files in the ilc package output -->
+    <ItemGroup>
+      <_IlcGeneratedSource Include="$(_IlcIntermediatePath)**\*.g.cs" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_IlcGeneratedSource)"
+        DestinationFolder="$(_IlcOutputPath)"
+        SkipUnchangedFiles="$(SkipCopyUnchangedFiles)"
+        />
+
+    <!-- Record intermediate and output files as file writes. -->
+    <ItemGroup>
+      <_IlcIntermediatePayload Include="$(_IlcIntermediatePath)**\*" />
+      <_IlcOutputPayload Include="$(_IlcOutputPath)**\*" />
+      <!-- Do not include manifest file in the payload -->
+      <_IlcOutputPayload Remove="@(_IlcOutputPayload)" Condition="'%(Filename)%(Extension)' == '$(_AppxManifestXmlFileName)'"  />
+      <FileWrites Include="@(_IlcIntermediatePayload)" />
+      <FileWrites Include="@(_IlcOutputPayload)" />
+    </ItemGroup>
+
+    <!-- 
+      Modify appx package payload so that the native package layout produced by ilc is used for deployment,
+      and produce the payload for the appxupload so that Store can compile it. 
+    -->
+    <ItemGroup>
+      <AppxUploadPackagePayload Include="@(AppxPackagePayload)" />
+      <PDBUploadPayload Include="@(_IlcInputPayload)" Condition="'%(_IlcInputPayload.Extension)' == '.pdb'" />
+      <FinalAppxUploadManifest Remove="@(FinalAppxManifest)"/>
+      <FinalAppxUploadManifest Include="$(_TransformedAppxManifestXmlFile)" />
+
+      <AppxPackagePayload Remove="@(_IlcInputPayload)" />
+      <AppxPackagePayload Include="@(_IlcOutputPayload)">
+        <TargetPath>%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+      </AppxPackagePayload>
+      <AppxPackagePayload Remove="$(_IlcOutputPath)**\*.g.cs" />  
+      <AppxPackagePayload Remove="$(_IlcOutputPath)**\*.xr.xml" />
+
+      <!-- Make sure we get the right PDB for sideloading -->
+      <PdbPayload Remove="@(PdbPayload)" />
+      <PdbPayload Include="@(_IlcOutputPayload)" Condition="'%(_IlcOutputPayload.Extension)' == '.pdb'" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <ProjectPriUploadFullPath>$(ProjectPriFullPath)</ProjectPriUploadFullPath>
+    </PropertyGroup>
+
+    <ItemGroup Condition="Exists('$(_TransformedAppxManifestXmlFile)')">
+      <FinalAppxManifest Remove="@(FinalAppxManifest)"/>
+      <FinalAppxManifest Include="$(_TransformedAppxManifestXmlFile)" />
+    </ItemGroup>
+
+    <!-- 
+      AppxPackage targets depend on ProjectPriFullPath being correctly set. In particular for AppxBundles 
+      the _CreatePackageLayout_CalculateInputsAndOutputs target expects this property to be set to exactly what
+      is contained in the AppxPackagePayload because it removes it and if the path doesn't exactly match it fails.
+    -->
+    <PropertyGroup Condition="Exists('$(_TransformedProjectPriFullPath)')">
+      <ProjectPriFullPath>$(_TransformedProjectPriFullPath)</ProjectPriFullPath>
+    </PropertyGroup>
+
+    <OnError ExecuteTargets="LogIlcBehavioralDifference"/>
+  </Target>
+
+  <Target Name="LogIlcBehavioralDifference">
+    <PropertyGroup>
+      <_IlcMinBehavioralExitCode>1400</_IlcMinBehavioralExitCode>
+    </PropertyGroup>
+    <IlcErrorTask Condition="'$(_IlcExitCode)' != '' and '$(_IlcExitCode)' &gt;= '$(_IlcMinBehavioralExitCode)'" ResourceName="Error_IlcBehavioralDifferences" />
+  </Target>
+
+  <Target Name="VerifySharedAssemblyApplicability" 
+    BeforeTargets="PrepareILCInputFolder;BeforeGenerateAppxManifest" 
+    DependsOnTargets="ResolveNuGetPackageAssets;InjectNetCoreFramework;QueryDotNetNativeDependencySDKs" 
+    Condition="'$(_ProjectNToolchainEnabled)' == 'true' and '$(UseDotNetNativeSharedAssemblyFrameworkPackage)' == 'true'">
+    
+    <Warning Text="Warning, could not locate SharedAssemblyList.txt file @ $(_IlcSharedAssemblyDefinitionFile), and @(ILCSharedLibraryFiles) was not specified.  Defaulting to replace all assemblies."
+             Condition="'@(ILCSharedLibraryFiles)' == '' AND !Exists('$(_IlcSharedAssemblyDefinitionFile)')"/>
+             
+    
+    <!-- Determine subset of libraries to include in shared lib -->
+    <ParseILMergeInfoTask SharedAssemblyILMergeInfoFilePath="$(_IlcSharedAssemblyDefinitionFile)">
+      <Output TaskParameter="SharedAssemblyComponents" ItemName="ILCSharedLibraryComponents"/>
+    </ParseILMergeInfoTask>
+    
+    <ItemGroup>    
+      <_referenceCopyLocalPathsAsFileName Include="@(AppxPackagePayload->'%(FileName)')" Condition="'%(AppxPackagePayload.OutputGroup)' == 'CopyLocalFilesOutputGroup' and '%(AppxPackagePayload.NuGetPackageId)' != ''" >
+        <OriginalItemSpec>%(Identity)</OriginalItemSpec>
+      </_referenceCopyLocalPathsAsFileName>
+      
+      <!-- Perform the intersection and transform back to path -->
+      <_libsToReplace Include="@(_referenceCopyLocalPathsAsFileName)" Condition="'@(_referenceCopyLocalPathsAsFileName)' == '@(ILCSharedLibraryComponents)' AND '%(Identity)' != ''"/>
+    </ItemGroup>
+
+    <!-- get version information from ReferenceCopyLocalPath libs -->
+    <GetAssemblyIdentity AssemblyFiles="@(_libsToReplace->'%(OriginalItemSpec)')">
+      <Output TaskParameter="Assemblies" ItemName="_libsToReplaceWithVersion"/>
+    </GetAssemblyIdentity>
+    
+    <SharedAssemblyApplicabilityVerifierTask
+      ProjectDependencies="@(_libsToReplaceWithVersion)"
+      SharedAssemblyContracts="@(ILCSharedLibraryComponents)" 
+      >
+      <Output TaskParameter="IsSharedAssemblyValid" PropertyName="UseDotNetNativeSharedAssemblyFrameworkPackage" />
+    </SharedAssemblyApplicabilityVerifierTask>
+
+    <ItemGroup>
+      <AppxManifestMetadata Include="UseDotNetNativeSharedAssemblyFrameworkPackage">
+        <Value>$(UseDotNetNativeSharedAssemblyFrameworkPackage)</Value>
+      </AppxManifestMetadata>
+    </ItemGroup>
+  </Target>
+</Project>

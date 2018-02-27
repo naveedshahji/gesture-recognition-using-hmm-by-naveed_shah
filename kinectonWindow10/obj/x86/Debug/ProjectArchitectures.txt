@@ -1,0 +1,1 @@
+G:\thesis and related papers\kinect head and neck detect\kinectonWindow10\kinectonWindow10.csproj;x86

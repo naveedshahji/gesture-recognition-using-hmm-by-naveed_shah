@@ -1,0 +1,6 @@
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\sqLiteApplication\bin\Debug\sqLiteApplication.exe.config
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\sqLiteApplication\bin\Debug\sqLiteApplication.exe
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\sqLiteApplication\bin\Debug\sqLiteApplication.pdb
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\sqLiteApplication\obj\Debug\sqLiteApplication.csprojResolveAssemblyReference.cache
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\sqLiteApplication\obj\Debug\sqLiteApplication.exe
+C:\Users\Naveed\Desktop\kinect code\kinect head and neck detect\sqLiteApplication\obj\Debug\sqLiteApplication.pdb
